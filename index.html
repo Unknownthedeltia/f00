@@ -471,13 +471,18 @@ function spawnEnemy(){
   const h=wrap.clientHeight;
   const roll=Math.random();
   let type='basic';
-  if(State.difficulty>3 && roll<0.07) type='splitter';
-  else if(State.difficulty>2 && roll<0.14) type='shielded';
-  else if(State.difficulty>1 && roll<0.22) type='sniper';
-  else if(State.difficulty>2 && roll<0.30) type='bouncer';
-  else if(State.difficulty>0 && roll<0.40) type='tank';
-  else if(roll<0.55) type='charger';
-  else if(roll<0.70) type='shooter';
+  if(State.difficulty>4 && roll<0.05) type='spawner';
+  else if(State.difficulty>3 && roll<0.10) type='mine';
+  else if(State.difficulty>3 && roll<0.15) type='ghost';
+  else if(State.difficulty>2 && roll<0.20) type='kamikaze';
+  else if(State.difficulty>2 && roll<0.26) type='drone';
+  else if(State.difficulty>3 && roll<0.32) type='splitter';
+  else if(State.difficulty>2 && roll<0.38) type='shielded';
+  else if(State.difficulty>1 && roll<0.44) type='sniper';
+  else if(State.difficulty>2 && roll<0.50) type='bouncer';
+  else if(State.difficulty>0 && roll<0.56) type='tank';
+  else if(roll<0.62) type='charger';
+  else if(roll<0.75) type='shooter';
   const y=rand(30,h-30);
   const speed=rand(80,150)+State.difficulty*3;
   let hp,r,color;
@@ -490,14 +495,22 @@ function spawnEnemy(){
     case 'shielded': hp=5+State.difficulty;r=13;color='#60a5fa';break;
     case 'sniper':   hp=3+State.difficulty;r=9;color='#f0abfc';break;
     case 'bouncer':  hp=5+State.difficulty;r=11;color='#fde68a';break;
+    case 'drone':    hp=4+Math.floor(State.difficulty*0.8);r=10;color='#22d3ee';break;
+    case 'kamikaze': hp=2+Math.floor(State.difficulty*0.4);r=9;color='#f97316';break;
+    case 'mine':     hp=3+Math.floor(State.difficulty*0.5);r=8;color='#a855f7';break;
+    case 'ghost':    hp=3+Math.floor(State.difficulty*0.6);r=11;color='#e879f9';break;
+    case 'spawner':  hp=8+State.difficulty;r=15;color='#84cc16';break;
     default:         hp=2;r=10;color='#ef4444';
   }
   State.entities.push({
     type,x:wrap.clientWidth+r+10,y,r,hp,maxHp:hp,speed,
-    vx:-speed,vy:(type==='bouncer'?rand(-60,60):0),
+    vx:-speed,vy:(type==='bouncer'||type==='drone'?rand(-60,60):0),
     fireCd:rand(900,1400),color,
     shield:(type==='shielded'?2:0),shieldCooldown:0,
-    sniperCharge:0
+    sniperCharge:0,
+    mineTimer:(type==='mine'?2000:0),
+    ghostAlpha:1,ghostTeleportCd:0,
+    spawnCd:(type==='spawner'?3000:0)
   });
 }
 
@@ -619,7 +632,7 @@ function applyChargeBeamTick(beam,tickMs){
     if(t.hp<=0){
       skill.kills++;
       if(t.type==='splitter'){for(let s=0;s<2;s++){State.entities.push({type:'basic',x:t.x,y:t.y+(s*20-10),r:7,hp:2,maxHp:2,speed:200,vx:-200,vy:rand(-60,60),fireCd:9999,color:'#fb923c'});}}
-      award(t.type==='basic'?10:t.type==='charger'?16:t.type==='tank'?40:t.type==='splitter'?30:t.type==='shielded'?25:t.type==='sniper'?20:t.type==='bouncer'?18:22);
+      award(t.type==='basic'?10:t.type==='charger'?16:t.type==='tank'?40:t.type==='splitter'?30:t.type==='shielded'?25:t.type==='sniper'?20:t.type==='bouncer'?18:t.type==='drone'?22:t.type==='kamikaze'?14:t.type==='mine'?18:t.type==='ghost'?20:t.type==='spawner'?35:22);
       burst(t.x,t.y,'#ef4444',10,240);
       State.entities.splice(j,1);
     }
@@ -663,7 +676,7 @@ function applyRainBeamTick(beam,tickMs){
     if(t.hp<=0){
       skill.kills++;
       if(t.type==='splitter'){for(let s=0;s<2;s++){State.entities.push({type:'basic',x:t.x,y:t.y+(s*20-10),r:7,hp:2,maxHp:2,speed:200,vx:-200,vy:rand(-60,60),fireCd:9999,color:'#fb923c'});}}
-      award(t.type==='basic'?10:t.type==='charger'?16:t.type==='tank'?40:t.type==='splitter'?30:t.type==='shielded'?25:t.type==='sniper'?20:t.type==='bouncer'?18:22);
+      award(t.type==='basic'?10:t.type==='charger'?16:t.type==='tank'?40:t.type==='splitter'?30:t.type==='shielded'?25:t.type==='sniper'?20:t.type==='bouncer'?18:t.type==='drone'?22:t.type==='kamikaze'?14:t.type==='mine'?18:t.type==='ghost'?20:t.type==='spawner'?35:22);
       burst(t.x,t.y,'#ef4444',10,240);
       State.entities.splice(j,1);
     }
@@ -1266,7 +1279,7 @@ function tryActivateSkill(){
     const dmg=60+State.level*5;
     [...State.entities].forEach(e=>{
       burst(e.x,e.y,'#fbbf24',20,300);e.hp-=dmg;
-      if(e.hp<=0){skill.kills++;award(e.type==='basic'?10:e.type==='charger'?16:22);State.entities.splice(State.entities.indexOf(e),1);}
+      if(e.hp<=0){skill.kills++;award(e.type==='basic'?10:e.type==='charger'?16:e.type==='tank'?40:e.type==='splitter'?30:e.type==='shielded'?25:e.type==='sniper'?20:e.type==='bouncer'?18:e.type==='drone'?22:e.type==='kamikaze'?14:e.type==='mine'?18:e.type==='ghost'?20:e.type==='spawner'?35:22);State.entities.splice(State.entities.indexOf(e),1);}
     });
     [...State.bosses].forEach(b=>{b.hp-=dmg*2;burst(b.x,b.y,'#fbbf24',30,400);if(b.hp<=0){award(250);burst(b.x,b.y,'#ef4444',50,500);State.bosses.splice(State.bosses.indexOf(b),1);toast('BOSS 撃破！');if(!State.bosses.length){bossHud.style.display='none';playBGM('game');}}});
     State.enemyBullets=[];
@@ -1290,7 +1303,7 @@ function chainThunder(){
     State.thunders.push({x1:depth===0?player.x:current&&current!==t?current.x:player.x,y1:depth===0?player.y:current&&current!==t?current.y:player.y,x2:t.x,y2:t.y,life:300});
     t.hp-=dmg;burst(t.x,t.y,'#fef08a',15,200);
     if(t.hp<=0){
-      if(State.entities.includes(t)){skill.kills++;award(t.type==='basic'?10:t.type==='charger'?16:22);State.entities.splice(State.entities.indexOf(t),1);}
+      if(State.entities.includes(t)){skill.kills++;award(t.type==='basic'?10:t.type==='charger'?16:t.type==='tank'?40:t.type==='splitter'?30:t.type==='shielded'?25:t.type==='sniper'?20:t.type==='bouncer'?18:t.type==='drone'?22:t.type==='kamikaze'?14:t.type==='mine'?18:t.type==='ghost'?20:t.type==='spawner'?35:22);State.entities.splice(State.entities.indexOf(t),1);}
       else if(State.bosses.includes(t)){award(250);burst(t.x,t.y,'#ef4444',30,400);State.bosses.splice(State.bosses.indexOf(t),1);toast('BOSS 撃破！');if(!State.bosses.length){bossHud.style.display='none';playBGM('game');}}
     }
     const prev=t;
@@ -1694,6 +1707,27 @@ function update(dt){
     if(e.type==='bouncer'){
       if(e.y<=20||e.y>=wrap.clientHeight-20)e.vy*=-1;
       e.fireCd-=edt;if(e.fireCd<=0){e.fireCd=rand(1000,1400);fireEnemyBullet(e,200,rand(-0.3,0.3),'bouncer');}
+    }
+    if(e.type==='drone'){
+      const da=Math.atan2(player.y-e.y,player.x-e.x);
+      e.vx=Math.cos(da)*160;e.vy=Math.sin(da)*160;
+      e.fireCd-=edt;if(e.fireCd<=0){e.fireCd=rand(800,1200);fireEnemyBullet(e,280,0,'#22d3ee');}
+    }
+    if(e.type==='kamikaze'){
+      const ka=Math.atan2(player.y-e.y,player.x-e.x);
+      e.vx=Math.cos(ka)*(280+State.difficulty*8);e.vy=Math.sin(ka)*(280+State.difficulty*8);
+    }
+    if(e.type==='mine'){
+      e.vx*=0.96;e.vy*=0.96;
+      e.mineTimer-=edt;if(e.mineTimer<=0){burst(e.x,e.y,'#a855f7',12,200);for(let m=0;m<5;m++){const ma=Math.random()*Math.PI*2;State.bullets.push({x:e.x,y:e.y,vx:Math.cos(ma)*180,vy:Math.sin(ma)*180,r:5,dmg:12,color:'#a855f7',life:800});}State.entities.splice(i,1);continue;}
+    }
+    if(e.type==='ghost'){
+      e.ghostTeleportCd-=edt;if(e.ghostTeleportCd<=0){e.ghostTeleportCd=rand(1500,2500);e.x=rand(100,wrap.clientWidth-100);e.y=rand(50,wrap.clientHeight-50);burst(e.x,e.y,'#e879f9',6,80);}
+      e.fireCd-=edt;if(e.fireCd<=0){e.fireCd=rand(1000,1400);fireEnemyBullet(e,320,rand(-0.2,0.2),'#e879f9');}
+    }
+    if(e.type==='spawner'){
+      e.spawnCd-=edt;if(e.spawnCd<=0){e.spawnCd=rand(2000,3000);State.entities.push({type:'basic',x:e.x+rand(-30,30),y:e.y+rand(-30,30),r:8,hp:2,maxHp:2,speed:180,vx:-180,vy:0,fireCd:9999,color:'#84cc16'});toast('Spawn!');}
+      e.fireCd-=edt;if(e.fireCd<=0){e.fireCd=rand(1200,1600);fireEnemyBullet(e,200,rand(-0.15,0.15));}
     }
 
     if(e.x<-60||e.y<-60||e.y>wrap.clientHeight+60){State.entities.splice(i,1);continue;}
@@ -2165,7 +2199,7 @@ function update(dt){
             if(State.entities.includes(near)){
               skill.kills++;
               if(near.type==='splitter'){for(let s=0;s<2;s++){State.entities.push({type:'basic',x:near.x,y:near.y+(s*20-10),r:7,hp:2,maxHp:2,speed:200,vx:-200,vy:rand(-60,60),fireCd:9999,color:'#fb923c'});}}
-              award(near.type==='basic'?10:near.type==='charger'?16:near.type==='tank'?40:near.type==='splitter'?30:near.type==='shielded'?25:near.type==='sniper'?20:near.type==='bouncer'?18:22);
+              award(near.type==='basic'?10:near.type==='charger'?16:near.type==='tank'?40:near.type==='splitter'?30:near.type==='shielded'?25:near.type==='sniper'?20:near.type==='bouncer'?18:near.type==='drone'?22:near.type==='kamikaze'?14:near.type==='mine'?18:near.type==='ghost'?20:near.type==='spawner'?35:22);
               burst(near.x,near.y,'#ef4444',10,240);
               const ni=State.entities.indexOf(near);if(ni>-1)State.entities.splice(ni,1);
             } else if(State.bosses.includes(near)){
@@ -2182,7 +2216,7 @@ function update(dt){
           if(target.type==='splitter'){
             for(let s=0;s<2;s++){State.entities.push({type:'basic',x:target.x,y:target.y+(s*20-10),r:7,hp:2,maxHp:2,speed:200,vx:-200,vy:rand(-60,60),fireCd:9999,color:'#fb923c'});}
           }
-          award(target.type==='basic'?10:target.type==='charger'?16:target.type==='tank'?40:target.type==='splitter'?30:target.type==='shielded'?25:target.type==='sniper'?20:target.type==='bouncer'?18:22);
+          award(target.type==='basic'?10:target.type==='charger'?16:target.type==='tank'?40:target.type==='splitter'?30:target.type==='shielded'?25:target.type==='sniper'?20:target.type==='bouncer'?18:target.type==='drone'?22:target.type==='kamikaze'?14:target.type==='mine'?18:target.type==='ghost'?20:target.type==='spawner'?35:22);
           burst(target.x,target.y,'#ef4444',10,240);
           const idx=State.entities.indexOf(target);if(idx>-1)State.entities.splice(idx,1);
         } else {
@@ -2490,6 +2524,11 @@ function render(){
       case 'shielded': drawCircle(e.x,e.y,e.r);if(e.shield>0){ctx.strokeStyle='#60a5fa';ctx.lineWidth=3;ctx.beginPath();ctx.arc(e.x,e.y,e.r+4,0,Math.PI*2);ctx.stroke();}break;
       case 'sniper': drawArrow(e.x,e.y,e.r);break;
       case 'bouncer': drawCircle(e.x,e.y,e.r);ctx.strokeStyle='#fde68a80';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,e.y,e.r+3,0,Math.PI*2);ctx.stroke();break;
+      case 'drone': drawDiamond(e.x,e.y,e.r);ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(e.x-e.r-3,e.y);ctx.lineTo(e.x+e.r+3,e.y);ctx.stroke();break;
+      case 'kamikaze': drawTriangle(e.x,e.y,e.r,'right');ctx.fillStyle='rgba(249,115,22,0.4)';ctx.beginPath();ctx.arc(e.x,e.y,e.r+4,0,Math.PI*2);ctx.fill();break;
+      case 'mine': drawCircle(e.x,e.y,e.r);ctx.fillStyle='#a855f7';ctx.globalAlpha=0.5+Math.sin(State.time/200)*0.3;ctx.beginPath();ctx.arc(e.x,e.y,e.r+2,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;break;
+      case 'ghost': ctx.globalAlpha=0.5+Math.sin(State.time/300)*0.3;drawCircle(e.x,e.y,e.r);ctx.strokeStyle='#e879f9';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,e.y,e.r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;break;
+      case 'spawner': drawHexagon(e.x,e.y,e.r);ctx.strokeStyle='#84cc16';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,e.y,e.r+5,0,Math.PI*2);ctx.stroke();break;
       default: drawCircle(e.x,e.y,e.r);
     }
   });
