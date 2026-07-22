@@ -3355,59 +3355,392 @@ function drawBoss(b){
   ctx.save();ctx.translate(b.x,b.y);
   const pulse=Math.sin(State.time*0.005)*0.15+1;
   ctx.scale(pulse,pulse);
+  const hpRatio=b.hp/b.maxHp;
+  const isCritical=hpRatio<0.3;
+  
   switch(b.kind){
-    case 'scatter':ctx.fillStyle='#ef4444';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();for(let k=0;k<6;k++){const a=k/6*Math.PI*2;ctx.fillRect(Math.cos(a)*b.r*0.8-3,Math.sin(a)*b.r*0.8-3,6,6);}break;
-    case 'summoner':ctx.fillStyle='#22c55e';ctx.fillRect(-b.r,-b.r,b.r*2,b.r*2);ctx.fillStyle='#166534';ctx.fillRect(-b.r*.5,-b.r*.5,b.r,b.r);break;
-    case 'spinner':ctx.rotate(b.angle||0);ctx.fillStyle='#f59e0b';ctx.beginPath();for(let k=0;k<3;k++){const a=k/3*Math.PI*2;ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*b.r,Math.sin(a)*b.r);}ctx.beginPath();ctx.moveTo(0,-b.r);ctx.lineTo(b.r*0.866,b.r*0.5);ctx.lineTo(-b.r*0.866,b.r*0.5);ctx.closePath();ctx.fill();break;
-    case 'homing':ctx.fillStyle='#3b82f6';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#1d4ed8';ctx.beginPath();ctx.arc(0,0,b.r*.5,0,Math.PI*2);ctx.fill();break;
-    case 'curtain':ctx.fillStyle='#9333ea';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(147,51,234,0.4)';ctx.beginPath();ctx.arc(0,0,b.r*1.4,0,Math.PI*2);ctx.fill();break;
-    case 'armored':ctx.fillStyle='#64748b';ctx.fillRect(-b.r,-b.r,b.r*2,b.r*2);ctx.fillStyle='#334155';ctx.fillRect(-b.r*0.6,-b.r*0.6,b.r*1.2,b.r*1.2);ctx.strokeStyle='#94a3b8';ctx.lineWidth=3;ctx.strokeRect(-b.r,-b.r,b.r*2,b.r*2);break;
-    case 'mirror':ctx.fillStyle='#67e8f9';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(103,232,249,0.4)';for(let m=-1;m<=1;m+=2){ctx.beginPath();ctx.arc(m*b.r*0.7,0,b.r*0.4,0,Math.PI*2);ctx.fill();}break;
-    case 'phaser':ctx.fillStyle='#a78bfa';ctx.beginPath();for(let k=0;k<5;k++){const a=k/5*Math.PI*2;const ri=k%2===0?b.r:b.r*0.5;ctx.lineTo(Math.cos(a)*ri,Math.sin(a)*ri);}ctx.closePath();ctx.fill();break;
-    case 'turret':ctx.fillStyle='#f97316';ctx.fillRect(-b.r,-b.r,b.r*2,b.r*2);ctx.fillStyle='#c2410c';ctx.fillRect(-b.r*0.4,-b.r*1.4,b.r*0.8,b.r);break;
-    case 'nova':ctx.fillStyle='#fb7185';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();const t=State.time*0.002;for(let k=0;k<8;k++){const a=k/8*Math.PI*2+t;ctx.fillStyle='rgba(251,113,133,0.3)';ctx.beginPath();ctx.arc(Math.cos(a)*b.r*1.2,Math.sin(a)*b.r*1.2,b.r*0.3,0,Math.PI*2);ctx.fill();}break;
+    // ─── SCATTER BOSS: 散弾砲塔 ──────────────────────────────
+    case 'scatter':{
+      // 赤い円形本体＋6 方向の砲塔
+      const grad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      grad.addColorStop(0,'#fca5a5');grad.addColorStop(0.6,'#ef4444');grad.addColorStop(1,'#991b1b');
+      ctx.fillStyle=grad;ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      
+      // 回転する砲塔
+      const turretRot=State.time*0.003;
+      for(let k=0;k<6;k++){
+        const a=turretRot+k/6*Math.PI*2;
+        ctx.save();ctx.rotate(a);
+        ctx.fillStyle='#7f1d1d';ctx.fillRect(b.r*0.6,-8,b.r*0.5,16);
+        ctx.fillStyle='#b91c1c';ctx.beginPath();ctx.arc(b.r*0.6,0,10,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      }
+      // コア
+      ctx.fillStyle=isCritical?'#fef08a':'#fef2f2';
+      ctx.beginPath();ctx.arc(0,0,b.r*0.35,0,Math.PI*2);ctx.fill();
+      if(isCritical){
+        ctx.strokeStyle='#ef4444';ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(0,0,b.r+8,0,Math.PI*2);ctx.stroke();
+      }
+      break;
+    }
+    
+    // ─── SUMMONER BOSS: 召喚の緑玉 ──────────────────────────
+    case 'summoner':{
+      // 緑色の正方形フレーム＋中央のコア
+      ctx.fillStyle='#14532d';ctx.fillRect(-b.r,-b.r,b.r*2,b.r*2);
+      ctx.strokeStyle='#22c55e';ctx.lineWidth=4;ctx.strokeRect(-b.r,-b.r,b.r*2,b.r*2);
+      
+      // 角の装飾
+      const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
+      corners.forEach(([cx,cy])=>{
+        ctx.fillStyle='#166534';ctx.beginPath();
+        ctx.arc(cx*b.r*0.85,cy*b.r*0.85,12,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#4ade80';ctx.beginPath();
+        ctx.arc(cx*b.r*0.85,cy*b.r*0.85,6,0,Math.PI*2);ctx.fill();
+      });
+      
+      // 中央コア（脈動）
+      const corePulse=Math.sin(State.time*0.008)*3;
+      ctx.fillStyle='#86efac';ctx.beginPath();
+      ctx.arc(0,0,b.r*0.4+corePulse,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#14532d';ctx.beginPath();
+      ctx.arc(0,0,b.r*0.25,0,Math.PI*2);ctx.fill();
+      
+      // 召喚リング
+      ctx.strokeStyle=`rgba(34,197,94,${0.3+Math.sin(State.time*0.01)*0.2})`;
+      ctx.lineWidth=2;ctx.beginPath();
+      ctx.arc(0,0,b.r*1.3,State.time*0.002,State.time*0.002+Math.PI*1.5);ctx.stroke();
+      break;
+    }
+    
+    // ─── SPINNER BOSS: 回転ノコギリ ─────────────────────────
+    case 'spinner':{
+      // 橙色の三枚刃
+      const bladeRot=b.angle||State.time*0.005;
+      ctx.save();ctx.rotate(bladeRot);
+      
+      const bladeGrad=ctx.createLinearGradient(-b.r,0,b.r,0);
+      bladeGrad.addColorStop(0,'#fbbf24');bladeGrad.addColorStop(0.5,'#f59e0b');bladeGrad.addColorStop(1,'#b45309');
+      ctx.fillStyle=bladeGrad;
+      
+      // 3 枚のブレード
+      for(let k=0;k<3;k++){
+        const a=k/3*Math.PI*2;
+        ctx.save();ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(0,-8);ctx.lineTo(b.r*0.9,0);ctx.lineTo(0,8);ctx.lineTo(b.r*0.3,0);ctx.closePath();
+        ctx.fill();
+        // ブレードのエッジ
+        ctx.strokeStyle='#fef3c7';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(b.r*0.9,0);ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+      
+      // 中央ハブ
+      ctx.fillStyle='#78350f';ctx.beginPath();ctx.arc(0,0,b.r*0.35,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fcd34d';ctx.beginPath();ctx.arc(0,0,b.r*0.2,0,Math.PI*2);ctx.fill();
+      
+      // 回転エフェクト
+      ctx.strokeStyle='rgba(245,158,11,0.4)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(0,0,b.r*1.1,0,Math.PI*2);ctx.stroke();
+      break;
+    }
+    
+    // ─── HOMING BOSS: 追尾青球 ──────────────────────────────
+    case 'homing':{
+      // 青色の二重球体
+      const outerGrad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      outerGrad.addColorStop(0,'#bae6fd');outerGrad.addColorStop(0.7,'#3b82f6');outerGrad.addColorStop(1,'#1e3a8a');
+      ctx.fillStyle=outerGrad;ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      
+      // 内側コア
+      const innerGrad=ctx.createRadialGradient(0,0,0,0,0,b.r*0.5);
+      innerGrad.addColorStop(0,'#e0f2fe');innerGrad.addColorStop(1,'#1d4ed8');
+      ctx.fillStyle=innerGrad;ctx.beginPath();ctx.arc(0,0,b.r*0.5,0,Math.PI*2);ctx.fill();
+      
+      // 追尾センサー（点滅）
+      const sensorBlink=Math.sin(State.time*0.02)>0.5;
+      ctx.fillStyle=sensorBlink?'#fef08a':'#1e3a8a';
+      for(let s=0;s<4;s++){
+        const sa=s/4*Math.PI*2;
+        ctx.beginPath();ctx.arc(Math.cos(sa)*b.r*0.75,Math.sin(sa)*b.r*0.75,5,0,Math.PI*2);ctx.fill();
+      }
+      
+      // オーラ
+      ctx.strokeStyle=`rgba(59,130,246,${0.4+Math.sin(State.time*0.015)*0.2})`;
+      ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,b.r*1.2,0,Math.PI*2);ctx.stroke();
+      break;
+    }
+    
+    // ─── CURTAIN BOSS: 弾幕の紫玉 ───────────────────────────
+    case 'curtain':{
+      // 紫色の本体＋透明なバリア層
+      const mainGrad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      mainGrad.addColorStop(0,'#e9d5ff');mainGrad.addColorStop(0.5,'#9333ea');mainGrad.addColorStop(1,'#581c87');
+      ctx.fillStyle=mainGrad;ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      
+      // 外側バリア（複数層）
+      for(let layer=3;layer>=1;layer--){
+        const barrierAlpha=0.15*layer;
+        const barrierSize=b.r*(1+layer*0.4);
+        ctx.fillStyle=`rgba(147,51,234,${barrierAlpha})`;
+        ctx.beginPath();ctx.arc(0,0,barrierSize,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle=`rgba(192,132,252,${barrierAlpha*2})`;
+        ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,barrierSize,0,Math.PI*2);ctx.stroke();
+      }
+      
+      // コア
+      ctx.fillStyle='#f5d0fe';ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.fill();
+      
+      // 弾幕チャージエフェクト
+      if(b.barrageCharging){
+        ctx.strokeStyle='#c084fc';ctx.lineWidth=4;
+        ctx.beginPath();ctx.arc(0,0,b.r+10,0,Math.PI*2);ctx.stroke();
+      }
+      break;
+    }
+    
+    // ─── ARMORED BOSS: 装甲戦車 ─────────────────────────────
+    case 'armored':{
+      // 灰色の装甲ボックス
+      const armorGrad=ctx.createLinearGradient(-b.r,-b.r,b.r,b.r);
+      armorGrad.addColorStop(0,'#94a3b8');armorGrad.addColorStop(0.5,'#64748b');armorGrad.addColorStop(1,'#334155');
+      ctx.fillStyle=armorGrad;ctx.fillRect(-b.r,-b.r,b.r*2,b.r*2);
+      
+      // 装甲プレート
+      ctx.strokeStyle='#475569';ctx.lineWidth=3;
+      ctx.strokeRect(-b.r*0.8,-b.r*0.8,b.r*1.6,b.r*1.6);
+      ctx.beginPath();
+      ctx.moveTo(-b.r,0);ctx.lineTo(b.r,0);
+      ctx.moveTo(0,-b.r);ctx.lineTo(0,b.r);
+      ctx.stroke();
+      
+      // 中央コア（ダメージで露出）
+      if(isCritical){
+        ctx.fillStyle='#fca5a5';ctx.beginPath();
+        ctx.arc(0,0,b.r*0.4,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='#ef4444';ctx.lineWidth=4;ctx.strokeRect(-b.r,-b.r,b.r*2,b.r*2);
+      }else{
+        ctx.fillStyle='#1e293b';ctx.fillRect(-b.r*0.3,-b.r*0.3,b.r*0.6,b.r*0.6);
+      }
+      
+      // リベット
+      ctx.fillStyle='#475569';
+      [[-0.7,-0.7],[0.7,-0.7],[0.7,0.7],[-0.7,0.7]].forEach(([px,py])=>{
+        ctx.beginPath();ctx.arc(px*b.r,py*b.r,5,0,Math.PI*2);ctx.fill();
+      });
+      break;
+    }
+    
+    // ─── MIRROR BOSS: 鏡像水玉 ──────────────────────────────
+    case 'mirror':{
+      // 水色の本体
+      const mirrorGrad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      mirrorGrad.addColorStop(0,'#ecfeff');mirrorGrad.addColorStop(0.6,'#67e8f9');mirrorGrad.addColorStop(1,'#164e63');
+      ctx.fillStyle=mirrorGrad;ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      
+      // 鏡像コア（左右対称）
+      for(let m=-1;m<=1;m+=2){
+        const mx=m*b.r*0.6;
+        const coreGrad=ctx.createRadialGradient(mx,0,0,mx,0,b.r*0.4);
+        coreGrad.addColorStop(0,'#ffffff');coreGrad.addColorStop(1,'rgba(103,232,249,0.4)');
+        ctx.fillStyle=coreGrad;ctx.beginPath();ctx.arc(mx,0,b.r*0.4,0,Math.PI*2);ctx.fill();
+      }
+      
+      // 中央メインコア
+      ctx.fillStyle='#cffafe';ctx.beginPath();ctx.arc(0,0,b.r*0.25,0,Math.PI*2);ctx.fill();
+      
+      // 鏡面反射エフェクト
+      ctx.fillStyle='rgba(255,255,255,0.3)';
+      ctx.beginPath();ctx.ellipse(-b.r*0.3,-b.r*0.3,b.r*0.25,b.r*0.15,-Math.PI/4,0,Math.PI*2);ctx.fill();
+      break;
+    }
+    
+    // ─── PHASER BOSS: 位相五角形 ────────────────────────────
+    case 'phaser':{
+      // 紫色の五角星
+      ctx.fillStyle='#a78bfa';ctx.beginPath();
+      for(let k=0;k<5;k++){
+        const a=k/5*Math.PI*2-Math.PI/2;
+        const ri=k%2===0?b.r:b.r*0.45;
+        if(k===0)ctx.moveTo(Math.cos(a)*ri,Math.sin(a)*ri);
+        else ctx.lineTo(Math.cos(a)*ri,Math.sin(a)*ri);
+      }
+      ctx.closePath();ctx.fill();
+      
+      // 内側五角形
+      ctx.fillStyle='#7c3aed';ctx.beginPath();
+      for(let k=0;k<5;k++){
+        const a=k/5*Math.PI*2-Math.PI/2+Math.PI/5;
+        const ri=b.r*0.35;
+        if(k===0)ctx.moveTo(Math.cos(a)*ri,Math.sin(a)*ri);
+        else ctx.lineTo(Math.cos(a)*ri,Math.sin(a)*ri);
+      }
+      ctx.closePath();ctx.fill();
+      
+      // 頂点の光
+      ctx.fillStyle='#ddd6fe';
+      for(let k=0;k<5;k++){
+        const a=k/5*Math.PI*2-Math.PI/2;
+        ctx.beginPath();ctx.arc(Math.cos(a)*b.r,Math.sin(a)*b.r,6,0,Math.PI*2);ctx.fill();
+      }
+      
+      // 位相シフトエフェクト
+      const phaseShift=Math.sin(State.time*0.004)*5;
+      ctx.strokeStyle=`rgba(167,139,250,${0.5+Math.sin(State.time*0.01)*0.3})`;
+      ctx.lineWidth=2;ctx.beginPath();
+      ctx.arc(0,0,b.r+phaseShift,0,Math.PI*2);ctx.stroke();
+      break;
+    }
+    
+    // ─── TURRET BOSS: 連装砲塔 ──────────────────────────────
+    case 'turret':{
+      // 橙色の砲塔ベース
+      ctx.fillStyle='#c2410c';ctx.fillRect(-b.r*0.9,-b.r*0.9,b.r*1.8,b.r*1.8);
+      
+      // 主砲（上下）
+      const turretRot=Math.sin(State.time*0.003)*0.5;
+      ctx.save();ctx.rotate(turretRot);
+      
+      // 上砲身
+      ctx.fillStyle='#9a3412';ctx.fillRect(-b.r*0.3,-b.r*1.5,b.r*0.6,b.r*0.8);
+      ctx.fillStyle='#ea580c';ctx.fillRect(-b.r*0.25,-b.r*1.5,b.r*0.5,b.r*0.7);
+      
+      // 下砲身
+      ctx.fillStyle='#9a3412';ctx.fillRect(-b.r*0.3,b.r*0.7,b.r*0.6,b.r*0.8);
+      ctx.fillStyle='#ea580c';ctx.fillRect(-b.r*0.25,b.r*0.7,b.r*0.5,b.r*0.7);
+      
+      ctx.restore();
+      
+      // 砲塔基部
+      ctx.fillStyle='#f97316';ctx.beginPath();ctx.arc(0,0,b.r*0.5,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fb923c';ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.fill();
+      
+      // 照準ライト
+      ctx.fillStyle=isCritical?'#fef08a':'#fde68a';
+      ctx.beginPath();ctx.arc(0,-b.r*1.3,4,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(0,b.r*1.3,4,0,Math.PI*2);ctx.fill();
+      break;
+    }
+    
+    // ─── NOVA BOSS: 超新星ピンク ────────────────────────────
+    case 'nova':{
+      // ピンク色の本体
+      const novaGrad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      novaGrad.addColorStop(0,'#ffe4e6');novaGrad.addColorStop(0.5,'#fb7185');novaGrad.addColorStop(1,'#be123c');
+      ctx.fillStyle=novaGrad;ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      
+      // 太陽フレア（8 方向）
+      const flareTime=State.time*0.002;
+      for(let k=0;k<8;k++){
+        const fa=k/8*Math.PI*2+flareTime;
+        const flareLen=b.r*0.5+Math.sin(flareTime*3+k)*b.r*0.3;
+        const fx=Math.cos(fa)*(b.r+flareLen);
+        const fy=Math.sin(fa)*(b.r+flareLen);
+        
+        ctx.fillStyle=`rgba(251,113,133,${0.4+Math.sin(flareTime+k)*0.2})`;
+        ctx.beginPath();ctx.arc(fx,fy,b.r*0.25,0,Math.PI*2);ctx.fill();
+      }
+      
+      // コロナリング
+      ctx.strokeStyle='rgba(251,113,133,0.3)';ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(0,0,b.r*1.4+Math.sin(flareTime)*3,0,Math.PI*2);ctx.stroke();
+      
+      // コア
+      ctx.fillStyle='#fff1f2';ctx.beginPath();ctx.arc(0,0,b.r*0.35,0,Math.PI*2);ctx.fill();
+      break;
+    }
 
+    // ─── WORM BOSS: 多節緑蛇 ────────────────────────────────
     case 'worm':{
       ctx.restore();
       if(b.wormSegs){
         for(let s=b.wormSegs.length-1;s>=0;s--){
           const seg=b.wormSegs[s];
           const alpha=1-s/b.wormSegs.length*0.5;
-          ctx.save();
-          ctx.fillStyle=s===0?'#22c55e':`rgba(34,${Math.max(0,180-s*14)},${Math.min(255,60+s*8)},${alpha})`;
-          ctx.beginPath();ctx.arc(seg.x,seg.y,seg.r,0,Math.PI*2);ctx.fill();
+          const segGrad=ctx.createRadialGradient(seg.x,seg.y,0,seg.x,seg.y,seg.r);
+          segGrad.addColorStop(0,s===0?'#86efac':`rgba(34,${Math.max(0,180-s*14)},${Math.min(255,60+s*8)},${alpha})`);
+          segGrad.addColorStop(1,s===0?'#14532d':`rgba(20,83,45,${alpha})`);
+          ctx.fillStyle=segGrad;ctx.beginPath();ctx.arc(seg.x,seg.y,seg.r,0,Math.PI*2);ctx.fill();
           if(s===0){
-            ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(seg.x+4,seg.y-5,4,0,Math.PI*2);ctx.fill();
-            ctx.fillStyle='#000';ctx.beginPath();ctx.arc(seg.x+5,seg.y-5,2,0,Math.PI*2);ctx.fill();
+            // 頭部：目と口
+            ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(seg.x+4,seg.y-5,5,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#000';ctx.beginPath();ctx.arc(seg.x+5,seg.y-5,2.5,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#dc2626';ctx.beginPath();ctx.arc(seg.x+3,seg.y+4,3,0,Math.PI*2);ctx.fill();
           }
-          ctx.restore();
         }
       }
-      if(b.hp/b.maxHp<0.3){
-        ctx.strokeStyle=`rgba(251,113,133,${0.5+Math.sin(State.time*0.01)*0.3})`;
-        ctx.lineWidth=4;ctx.beginPath();ctx.arc(b.x,b.y,b.r+6,0,Math.PI*2);ctx.stroke();
+      if(isCritical){
+        ctx.strokeStyle=`rgba(251,113,133,${0.7+Math.sin(State.time*0.02)*0.3})`;
+        ctx.lineWidth=5;ctx.beginPath();ctx.arc(b.x,b.y,b.r+8,0,Math.PI*2);ctx.stroke();
       }
       return;
     }
+    
+    // ─── MISSILE LORD BOSS: ミサイル要塞 ─────────────────────
     case 'missile_lord':{
-      ctx.fillStyle='#f97316';ctx.fillRect(-b.r,-b.r*0.7,b.r*2,b.r*1.4);
-      ctx.fillStyle='#c2410c';ctx.fillRect(-b.r*0.3,-b.r*1.3,b.r*0.6,b.r*0.9);
-      ctx.fillStyle='#fb923c';
-      for(let m=-1;m<=1;m+=2){ctx.fillRect(-b.r*0.6,m*b.r*0.5,b.r*0.5,m*b.r*0.35);}
-      const ef=Math.sin(State.time*0.015)*4;
-      ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(b.r,0,6+ef,0,Math.PI*2);ctx.fill();
-      break;}
+      // 本体（橙色の装甲）
+      const mlGrad=ctx.createLinearGradient(-b.r,-b.r*0.7,b.r,b.r*0.7);
+      mlGrad.addColorStop(0,'#fdba74');mlGrad.addColorStop(0.5,'#f97316');mlGrad.addColorStop(1,'#c2410c');
+      ctx.fillStyle=mlGrad;ctx.fillRect(-b.r,-b.r*0.7,b.r*2,b.r*1.4);
+      
+      // 上部砲塔
+      ctx.fillStyle='#9a3412';ctx.fillRect(-b.r*0.35,-b.r*1.35,b.r*0.7,b.r*0.95);
+      ctx.fillStyle='#ea580c';ctx.fillRect(-b.r*0.28,-b.r*1.28,b.r*0.56,b.r*0.8);
+      
+      // サイドミサイルポッド
+      for(let m=-1;m<=1;m+=2){
+        const my=m*b.r*0.5;
+        ctx.fillStyle='#fb923c';ctx.fillRect(-b.r*0.65,my-b.r*0.25,b.r*0.55,b.r*0.5);
+        ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(-b.r*0.65,my,b.r*0.2,0,Math.PI*2);ctx.fill();
+      }
+      
+      // 前方センサー（点滅）
+      const sensorEf=Math.sin(State.time*0.015)*4;
+      ctx.fillStyle='#fef08a';ctx.beginPath();ctx.arc(b.r,0,8+sensorEf,0,Math.PI*2);ctx.fill();
+      
+      // ミサイルハッチ
+      ctx.fillStyle='#7c2d12';
+      [[-b.r*0.4,-b.r*0.5],[b.r*0.3,-b.r*0.5],[-b.r*0.4,b.r*0.3],[b.r*0.3,b.r*0.3]].forEach(([hx,hy])=>{
+        ctx.fillRect(hx,hy,b.r*0.2,b.r*0.15);
+      });
+      break;
+    }
+    
+    // ─── OMEGA HOMING BOSS: 追尾菱形 ────────────────────────
     case 'omega_homing':{
-      ctx.fillStyle='#0ea5e9';ctx.beginPath();
-      ctx.moveTo(0,-b.r*1.2);ctx.lineTo(b.r*0.9,0);ctx.lineTo(0,b.r*1.2);ctx.lineTo(-b.r*0.9,0);ctx.closePath();ctx.fill();
-      ctx.fillStyle='#7dd3fc';ctx.beginPath();ctx.arc(0,0,b.r*0.4,0,Math.PI*2);ctx.fill();
+      // 青色の菱形本体
+      const ohGrad=ctx.createRadialGradient(0,0,0,0,0,b.r*1.2);
+      ohGrad.addColorStop(0,'#e0f2fe');ohGrad.addColorStop(0.6,'#0ea5e9');ohGrad.addColorStop(1,'#0c4a6e');
+      ctx.fillStyle=ohGrad;ctx.beginPath();
+      ctx.moveTo(0,-b.r*1.25);ctx.lineTo(b.r*0.95,0);ctx.lineTo(0,b.r*1.25);ctx.lineTo(-b.r*0.95,0);ctx.closePath();ctx.fill();
+      
+      // 内側コア
+      ctx.fillStyle='#7dd3fc';ctx.beginPath();ctx.arc(0,0,b.r*0.45,0,Math.PI*2);ctx.fill();
+      
+      // 回転リング（2 重）
       const rt=State.time*0.004;
-      ctx.strokeStyle='rgba(125,211,252,0.6)';ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(0,0,b.r*1.3,rt,rt+Math.PI*1.6);ctx.stroke();
-      ctx.beginPath();ctx.arc(0,0,b.r*1.6,-rt,-rt+Math.PI*1.4);ctx.stroke();
-      break;}
+      ctx.strokeStyle='rgba(125,211,252,0.7)';ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(0,0,b.r*1.35,rt,rt+Math.PI*1.7);ctx.stroke();
+      ctx.strokeStyle='rgba(56,189,248,0.5)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(0,0,b.r*1.65,-rt*1.3,-rt*1.3+Math.PI*1.5);ctx.stroke();
+      
+      // センサーポイント
+      ctx.fillStyle='#bae6fd';
+      [0,Math.PI*0.67,Math.PI*1.33].forEach(a=>{
+        ctx.beginPath();ctx.arc(Math.cos(a)*b.r*0.7,Math.sin(a)*b.r*0.7,4,0,Math.PI*2);ctx.fill();
+      });
+      break;
+    }
+    
+    // ─── THUNDER GOD BOSS: 雷神五角星 ──────────────────────
     case 'thunder_god':{
-      ctx.fillStyle='#fbbf24';ctx.beginPath();
+      // 金色の五角星
+      const tgGrad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      tgGrad.addColorStop(0,'#fef9c3');tgGrad.addColorStop(0.5,'#fbbf24');tgGrad.addColorStop(1,'#92400e');
+      ctx.fillStyle=tgGrad;ctx.beginPath();
       for(let k=0;k<5;k++){
         const ao=k/5*Math.PI*2-Math.PI/2;const ai=ao+Math.PI/5;
         const ro=b.r,ri=b.r*0.42;
@@ -3415,92 +3748,241 @@ function drawBoss(b){
         else ctx.lineTo(Math.cos(ao)*ro,Math.sin(ao)*ro);
         ctx.lineTo(Math.cos(ai)*ri,Math.sin(ai)*ri);
       }ctx.closePath();ctx.fill();
-      ctx.fillStyle='#fef08a';ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.fill();
-      if(b.lightningCharging||(b.lightningCharge>0&&b.lightningCharge%(400)<200)){
-        ctx.strokeStyle=`rgba(254,240,138,${0.5+Math.sin(State.time*0.03)*0.5})`;
-        ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,b.r+10,0,Math.PI*2);ctx.stroke();
+      
+      // 中央コア
+      ctx.fillStyle='#fef08a';ctx.beginPath();ctx.arc(0,0,b.r*0.35,0,Math.PI*2);ctx.fill();
+      
+      // 雷チャージエフェクト
+      const isCharging=b.lightningCharging||(b.lightningCharge>0&&b.lightningCharge%(400)<200);
+      if(isCharging){
+        const lightningAlpha=0.6+Math.sin(State.time*0.03)*0.4;
+        ctx.strokeStyle=`rgba(254,240,138,${lightningAlpha})`;
+        ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,b.r+12,0,Math.PI*2);ctx.stroke();
+        
+        // 放電エフェクト
+        ctx.strokeStyle=`rgba(253,224,71,${lightningAlpha*0.7})`;ctx.lineWidth=2;
+        for(let l=0;l<5;l++){
+          const la=l/5*Math.PI*2-Math.PI/2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(la)*b.r,Math.sin(la)*b.r);
+          ctx.lineTo(Math.cos(la)*(b.r+20+Math.random()*10),Math.sin(la)*(b.r+20+Math.random()*10));
+          ctx.stroke();
+        }
       }
-      break;}
-    // ─── New Bosses Drawing ─────────────────────────────────────────
+      break;
+    }
+    
+    // ─── MAGNUM BOSS: 大型銃砲 ──────────────────────────────
     case 'magnum':{
-      // 銃のような見た目 - 右側に銃身が突き出たデザイン
-      ctx.fillStyle='#78350f';ctx.beginPath();ctx.arc(0,0,b.r*0.7,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle='#92400e';ctx.fillRect(b.r*0.4,-b.r*0.5,b.r*1.2,b.r);
-      ctx.fillStyle='#f59e0b';ctx.fillRect(b.r*1.4,-b.r*0.3,b.r*0.3,b.r*0.6);
-      ctx.fillStyle='#d97706';ctx.beginPath();ctx.arc(b.r*1.6,0,b.r*0.4,0,Math.PI*2);ctx.fill();
+      // 銃身ベース（茶色）
+      ctx.fillStyle='#78350f';ctx.beginPath();ctx.arc(0,0,b.r*0.75,0,Math.PI*2);ctx.fill();
+      
+      // 主砲身（右方向）
+      const barrelGrad=ctx.createLinearGradient(b.r*0.4,0,b.r*1.8,0);
+      barrelGrad.addColorStop(0,'#92400e');barrelGrad.addColorStop(1,'#78350f');
+      ctx.fillStyle=barrelGrad;ctx.fillRect(b.r*0.4,-b.r*0.55,b.r*1.3,b.r*1.1);
+      
+      // 砲口
+      ctx.fillStyle='#f59e0b';ctx.fillRect(b.r*1.5,-b.r*0.35,b.r*0.35,b.r*0.7);
+      ctx.fillStyle='#d97706';ctx.beginPath();ctx.arc(b.r*1.7,0,b.r*0.45,0,Math.PI*2);ctx.fill();
+      
+      // サイト
+      ctx.fillStyle='#fbbf24';ctx.fillRect(b.r*0.8,-b.r*0.65,b.r*0.15,b.r*0.2);
+      ctx.fillRect(b.r*1.2,-b.r*0.65,b.r*0.15,b.r*0.2);
+      
+      // リロード表示
       if(b.magnumReloading){
         ctx.fillStyle='#fbbf24';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
-        ctx.fillText('RELOAD',0,-b.r-10);
+        ctx.fillText('RELOAD',0,-b.r-12);
       }
-      break;}
+      
+      // ダメージで排気
+      if(isCritical){
+        ctx.fillStyle='rgba(251,191,36,0.4)';
+        for(let sm=0;sm<5;sm++){
+          ctx.beginPath();ctx.arc(b.r*1.8+Math.random()*10,(Math.random()-0.5)*20,8+Math.random()*8,0,Math.PI*2);ctx.fill();
+        }
+      }
+      break;
+    }
+    
+    // ─── SATELLITE BOSS: 衛星防衛システム ───────────────────
     case 'satellite':{
-      // 衛星のような見た目 - 中央コアと回転する衛星
-      ctx.fillStyle='#1e3a8a';ctx.beginPath();ctx.arc(0,0,b.r*0.6,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle='#3b82f6';ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.fill();
-      // 衛星を描画
-      const satCount=b.satellites?b.satellites.length:2;
+      // 中央コア（深藍色）
+      const satCoreGrad=ctx.createRadialGradient(0,0,0,0,0,b.r*0.65);
+      satCoreGrad.addColorStop(0,'#3b82f6');satCoreGrad.addColorStop(1,'#1e3a8a');
+      ctx.fillStyle=satCoreGrad;ctx.beginPath();ctx.arc(0,0,b.r*0.65,0,Math.PI*2);ctx.fill();
+      
+      // 内側コア
+      ctx.fillStyle='#60a5fa';ctx.beginPath();ctx.arc(0,0,b.r*0.35,0,Math.PI*2);ctx.fill();
+      
+      // 衛星（軌道回転）
       for(const sat of (b.satellites||[])){
         ctx.save();
         ctx.translate(sat.x-b.x,sat.y-b.y);
-        ctx.fillStyle='#60a5fa';ctx.beginPath();ctx.arc(0,0,sat.r,0,Math.PI*2);ctx.fill();
-        ctx.fillStyle='#93c5fd';ctx.fillRect(-sat.r*0.8,-sat.r*0.3,sat.r*1.6,sat.r*0.6);
+        
+        // 衛星パネル
+        const satGrad=ctx.createLinearGradient(-sat.r,0,sat.r,0);
+        satGrad.addColorStop(0,'#1e40af');satGrad.addColorStop(0.5,'#3b82f6');satGrad.addColorStop(1,'#60a5fa');
+        ctx.fillStyle=satGrad;ctx.beginPath();ctx.arc(0,0,sat.r,0,Math.PI*2);ctx.fill();
+        
+        // ソーラーパネル
+        ctx.fillStyle='#93c5fd';ctx.fillRect(-sat.r*0.9,-sat.r*0.35,sat.r*1.8,sat.r*0.7);
+        ctx.strokeStyle='#bfdbfe';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(-sat.r*0.5,0);ctx.lineTo(sat.r*0.5,0);ctx.stroke();
+        
+        // アンテナ
+        ctx.strokeStyle='#fbbf24';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(0,-sat.r*0.8);ctx.lineTo(0,-sat.r*1.3);ctx.stroke();
+        ctx.fillStyle='#fcd34d';ctx.beginPath();ctx.arc(0,-sat.r*1.3,3,0,Math.PI*2);ctx.fill();
+        
         ctx.restore();
       }
-      break;}
+      
+      // 軌道リング
+      ctx.strokeStyle='rgba(59,130,246,0.3)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(0,0,b.r*1.2,0,Math.PI*2);ctx.stroke();
+      break;
+    }
+    
+    // ─── CRYSTAL CORE BOSS: 結晶六角形 ──────────────────────
     case 'crystal_core':{
-      // 結晶コアの見た目
       const rot=b.crystalRotation||0;
       ctx.save();ctx.rotate(rot);
-      ctx.fillStyle='#c084fc';ctx.beginPath();
+      
+      // 外側六角クリスタル
+      const crystalGrad=ctx.createRadialGradient(0,0,0,0,0,b.r);
+      crystalGrad.addColorStop(0,'#f5f3ff');crystalGrad.addColorStop(0.6,'#c084fc');crystalGrad.addColorStop(1,'#7e22ce');
+      ctx.fillStyle=crystalGrad;ctx.beginPath();
       for(let k=0;k<6;k++){
         const a=k/6*Math.PI*2;
         const ri=b.r*(k%2===0?1:0.6);
         ctx.lineTo(Math.cos(a)*ri,Math.sin(a)*ri);
       }
       ctx.closePath();ctx.fill();
-      ctx.fillStyle='#e9d5ff';ctx.beginPath();ctx.arc(0,0,b.r*0.35,0,Math.PI*2);ctx.fill();
-      ctx.restore();
-      // 破片のエフェクト
-      if(b.phase===2){
-        ctx.strokeStyle='rgba(216,180,254,0.6)';ctx.lineWidth=2;
-        ctx.beginPath();ctx.arc(0,0,b.r+8,0,Math.PI*2);ctx.stroke();
+      
+      // クリスタルファセット（面）
+      ctx.strokeStyle='#e9d5ff';ctx.lineWidth=1;
+      for(let k=0;k<6;k++){
+        const a=k/6*Math.PI*2;
+        ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*b.r,Math.sin(a)*b.r);ctx.stroke();
       }
-      break;}
+      
+      // 中央コア
+      ctx.fillStyle='#f3e8ff';ctx.beginPath();ctx.arc(0,0,b.r*0.4,0,Math.PI*2);ctx.fill();
+      
+      ctx.restore();
+      
+      // フェーズ 2 で破片放出
+      if(b.phase===2){
+        ctx.strokeStyle='rgba(216,180,254,0.7)';ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(0,0,b.r+10+Math.sin(State.time*0.02)*5,0,Math.PI*2);ctx.stroke();
+        
+        // 浮遊クリスタル
+        for(let fc=0;fc<4;fc++){
+          const fa=fc/4*Math.PI*2+State.time*0.003;
+          const fr=b.r*1.5+Math.sin(State.time*0.01+fc)*5;
+          ctx.fillStyle='rgba(192,132,252,0.6)';ctx.beginPath();
+          ctx.moveTo(Math.cos(fa)*fr,Math.sin(fa)*fr-b.r*0.2);
+          ctx.lineTo(Math.cos(fa+0.3)*fr,Math.sin(fa+0.3)*fr);
+          ctx.lineTo(Math.cos(fa)*fr,Math.sin(fa)*fr+b.r*0.2);ctx.closePath();ctx.fill();
+        }
+      }
+      break;
+    }
+    
+    // ─── SHADOW CLONE BOSS: 影分身マスター ──────────────────
     case 'shadow_clone':{
-      // 影のような形状
-      ctx.fillStyle='#1e293b';ctx.beginPath();
-      ctx.moveTo(0,-b.r*1.2);ctx.bezierCurveTo(b.r*0.8,-b.r*0.6,b.r*1.2,b.r*0.3,0,b.r*1.2);
-      ctx.bezierCurveTo(-b.r*1.2,b.r*0.3,-b.r*0.8,-b.r*0.6,0,-b.r*1.2);ctx.closePath();ctx.fill();
-      ctx.fillStyle='#475569';ctx.beginPath();ctx.arc(0,0,b.r*0.4,0,Math.PI*2);ctx.fill();
-      // 分身を描画
+      // 本体（流線型の影）
+      const shadowGrad=ctx.createRadialGradient(0,-b.r*0.2,0,0,0,b.r*1.2);
+      shadowGrad.addColorStop(0,'#475569');shadowGrad.addColorStop(0.7,'#1e293b');shadowGrad.addColorStop(1,'#0f172a');
+      ctx.fillStyle=shadowGrad;ctx.beginPath();
+      ctx.moveTo(0,-b.r*1.25);
+      ctx.bezierCurveTo(b.r*0.85,-b.r*0.65,b.r*1.25,b.r*0.35,0,b.r*1.25);
+      ctx.bezierCurveTo(-b.r*1.25,b.r*0.35,-b.r*0.85,-b.r*0.65,0,-b.r*1.25);
+      ctx.closePath();ctx.fill();
+      
+      // 中心コア（薄暗い光）
+      ctx.fillStyle='#64748b';ctx.beginPath();ctx.arc(0,0,b.r*0.45,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#94a3b8';ctx.beginPath();ctx.arc(0,0,b.r*0.25,0,Math.PI*2);ctx.fill();
+      
+      // 分身たち
       for(const clone of (b.shadowClones||[])){
         ctx.save();
         ctx.translate(clone.x-b.x,clone.y-b.y);
-        ctx.fillStyle='#334155';ctx.beginPath();
-        ctx.moveTo(0,-clone.r);ctx.lineTo(clone.r*0.8,clone.r*0.6);ctx.lineTo(-clone.r*0.8,clone.r*0.6);ctx.closePath();ctx.fill();
+        
+        const cloneAlpha=0.6+Math.sin(State.time*0.01+clone.x)*0.3;
+        ctx.fillStyle=`rgba(51,65,85,${cloneAlpha})`;ctx.beginPath();
+        ctx.moveTo(0,-clone.r);
+        ctx.bezierCurveTo(clone.r*0.7,-clone.r*0.5,clone.r*0.8,clone.r*0.6,0,clone.r);
+        ctx.bezierCurveTo(-clone.r*0.8,clone.r*0.6,-clone.r*0.7,-clone.r*0.5,0,-clone.r);
+        ctx.closePath();ctx.fill();
+        
+        // 分身の目
+        ctx.fillStyle=`rgba(148,163,184,${cloneAlpha})`;ctx.beginPath();
+        ctx.arc(0,0,clone.r*0.3,0,Math.PI*2);ctx.fill();
+        
         ctx.restore();
       }
-      break;}
+      
+      // 本体の目（赤く光る）
+      ctx.fillStyle=isCritical?'#ef4444':'#dc2626';
+      ctx.beginPath();ctx.arc(b.r*0.25,-b.r*0.3,4,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(-b.r*0.25,-b.r*0.3,4,0,Math.PI*2);ctx.fill();
+      break;
+    }
+    
+    // ─── GRAVITY WELL BOSS: 重力渦 ──────────────────────────
     case 'gravity_well':{
-      // 渦巻き状の重力井戸
       const swirl=State.time*0.003;
-      ctx.fillStyle='#581c87';ctx.beginPath();ctx.arc(0,0,b.r*0.5,0,Math.PI*2);ctx.fill();
+      
+      // 中心ブラックホール風
+      const gwGrad=ctx.createRadialGradient(0,0,0,0,0,b.r*0.6);
+      gwGrad.addColorStop(0,'#000000');gwGrad.addColorStop(0.7,'#581c87');gwGrad.addColorStop(1,'#7e22ce');
+      ctx.fillStyle=gwGrad;ctx.beginPath();ctx.arc(0,0,b.r*0.6,0,Math.PI*2);ctx.fill();
+      
+      // 事象の地平面
+      ctx.fillStyle='#000';ctx.beginPath();ctx.arc(0,0,b.r*0.25,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#a855f7';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.stroke();
+      
+      // 渦巻きアーム（3 本）
       ctx.strokeStyle='#a855f7';ctx.lineWidth=3;
       for(let s=0;s<3;s++){
         ctx.beginPath();
-        for(let a=0;a<Math.PI*2;a+=0.1){
-          const r=b.r*(0.3+a*0.3);
+        for(let a=0;a<Math.PI*2.5;a+=0.15){
+          const r=b.r*(0.35+a*0.35);
           const ang=a+swirl+s*Math.PI*2/3;
           const x=Math.cos(ang)*r,y=Math.sin(ang)*r;
           if(a===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
         }
         ctx.stroke();
       }
-      // 重力の効果
-      ctx.fillStyle='rgba(168,85,247,0.2)';ctx.beginPath();ctx.arc(0,0,b.r*1.5+Math.sin(State.time*0.01)*5,0,Math.PI*2);ctx.fill();
-      break;}
+      
+      // 重力レンズ効果（外側オーラ）
+      const gravityPulse=b.r*1.5+Math.sin(State.time*0.01)*6;
+      const gwAuraGrad=ctx.createRadialGradient(0,0,b.r*0.8,0,0,gravityPulse);
+      gwAuraGrad.addColorStop(0,'rgba(168,85,247,0.4)');
+      gwAuraGrad.addColorStop(0.5,'rgba(147,51,234,0.15)');
+      gwAuraGrad.addColorStop(1,'rgba(107,33,168,0)');
+      ctx.fillStyle=gwAuraGrad;ctx.beginPath();ctx.arc(0,0,gravityPulse,0,Math.PI*2);ctx.fill();
+      
+      // 吸い込みパーティクル
+      ctx.fillStyle='rgba(192,132,252,0.5)';
+      for(let p=0;p<6;p++){
+        const pa=p/6*Math.PI*2-swirl*2;
+        const pr=b.r*(0.7+Math.sin(State.time*0.02+p)*0.15);
+        ctx.beginPath();ctx.arc(Math.cos(pa)*pr,Math.sin(pa)*pr,3,0,Math.PI*2);ctx.fill();
+      }
+      break;
+    }
   }
-  if(b.hp/b.maxHp<0.3){ctx.strokeStyle=`rgba(251,113,133,${0.5+Math.sin(State.time*0.01)*0.3})`;ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,b.r+6,0,Math.PI*2);ctx.stroke();}
+  
+  // クリティカル時の共通エフェクト（switch の break 後）
+  if(isCritical){
+    ctx.strokeStyle=`rgba(251,113,133,${0.6+Math.sin(State.time*0.02)*0.4})`;
+    ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,b.r+8,0,Math.PI*2);ctx.stroke();
+  }
+  
   ctx.restore();
 }
 
