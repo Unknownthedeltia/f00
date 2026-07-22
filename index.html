@@ -427,11 +427,11 @@ function spawnEnemy(){
 // ─── Boss Pool ────────────────────────────────────────────────────
 // Boss types: scatter / summoner / spinner / homing / curtain / armored / mirror / phaser / turret / nova
 // NEW: worm / missile_lord / omega_homing / thunder_god
-const BOSS_TABLE=['scatter','summoner','spinner','homing','curtain','armored','mirror','phaser','turret','nova','worm','missile_lord','omega_homing','thunder_god'];
+const BOSS_TABLE=['scatter','summoner','spinner','homing','curtain','armored','mirror','phaser','turret','nova','worm','missile_lord','omega_homing','thunder_god','magnum','satellite','crystal_core','shadow_clone','gravity_well'];
 
 function getBossName(kind){
   const n={scatter:'SCATTER LORD',summoner:'THE SUMMONER',spinner:'SPIN DEMON',homing:'HUNTER',curtain:'CURTAIN KING',armored:'IRON TITAN',mirror:'THE MIRROR',phaser:'PHASE SHIFTER',turret:'SIEGE TURRET',nova:'NOVA CORE',
-    worm:'VOID WORM',missile_lord:'MISSILE LORD',omega_homing:'OMEGA HUNTER',thunder_god:'THUNDER GOD'};
+    worm:'VOID WORM',missile_lord:'MISSILE LORD',omega_homing:'OMEGA HUNTER',thunder_god:'THUNDER GOD',magnum:'MAGNUM CANNON',satellite:'SATELLITE GUARDIAN',crystal_core:'CRYSTAL CORE',shadow_clone:'SHADOW CLONE',gravity_well:'GRAVITY WELL'};
   return n[kind]||kind.toUpperCase();
 }
 
@@ -453,7 +453,7 @@ function spawnBoss(){
   const hp=Math.round((100+State.difficulty*18)*0.4); // 60%ナーフ
   const boss={
     type:'boss',kind,x:wrap.clientWidth+80,y:wrap.clientHeight/2,
-    r:kind==='turret'?38:kind==='nova'?34:kind==='worm'?22:kind==='missile_lord'?32:kind==='thunder_god'?30:28,
+    r:kind==='turret'?38:kind==='nova'?34:kind==='worm'?22:kind==='missile_lord'?32:kind==='thunder_god'?30:kind==='magnum'?42:kind==='satellite'?36:kind==='crystal_core'?30:kind==='shadow_clone'?26:kind==='gravity_well'?38:28,
     hp,maxHp:hp,speed:40,vx:-40,vy:0,
     fireCd:400,summonCd:1200,angle:0,lockOnTimer:2000,lockedOn:false,
     phase:1,phaseTrigger:0.5,phaseChanged:false,
@@ -468,15 +468,27 @@ function spawnBoss(){
     // オメガホーミング用
     omegaLockTimer:0,omegaLocked:[],
     // 雷神用
-    lightningCd:0,lightningCharge:0,lightningCharging:false
+    lightningCd:0,lightningCharge:0,lightningCharging:false,
+    // Magnum 用
+    reloadTimer:0,attackCount:0,isReloading:false,
+    // Satellite 用
+    satelliteAngle:0,satellites:[]
   };
+  // Satellite の衛星初始化
+  if(kind==='satellite'){
+    for(let i=0;i<4;i++){
+      boss.satellites.push({angle:i*Math.PI/2,distance:55,r:8,hp:30});
+    }
+    boss.maxHp=hp+boss.satellites.length*30;
+    boss.hp=boss.maxHp;
+  }
   State.bosses.push(boss);
   burst(boss.x-20,boss.y,'#ef4444',20,200);
   toast('👾 BOSS: '+getBossName(kind));
   bossHud.style.display='block';
   bossNameEl.textContent='BOSS: '+getBossName(kind);
   bossPhaseEl.textContent='Phase 1';
-  bossHpTextEl.textContent=hp.toLocaleString()+' / '+hp.toLocaleString();
+  bossHpTextEl.textContent=boss.maxHp.toLocaleString()+' / '+boss.maxHp.toLocaleString();
   playBGM('boss');
 }
 
@@ -1355,6 +1367,146 @@ function update(dt){
           }
         }
         break;}
+
+      // ─── 新ボス：Magnum ─────────────────────────────────────────
+      case 'magnum':{
+        // 銃のような見た目、6 回大きな攻撃後すぐに Reload
+        b.attackCount+=1;
+        if(b.isReloading){
+          b.reloadTimer-=edt;
+          if(b.reloadTimer<=0){
+            b.isReloading=false;
+            b.attackCount=0;
+            toast('🔫 Reload 完了！');
+            burst(b.x,b.y,'#fbbf24',15,150);
+          }
+        }else{
+          if(b.attackCount>=6){
+            // Reload 開始
+            b.isReloading=true;
+            b.reloadTimer=1800;
+            toast('🔫 Reload...');
+            playSfx(sfx.reload||sfx.bu||null);
+            break;
+          }
+          if(b.fireCd<=0){
+            b.fireCd=p2?450:700;
+            // 大きな一発
+            const a=Math.atan2(player.y-b.y,player.x-b.x);
+            State.enemyBullets.push({type:'normal',x:b.x,y:b.y,r:14,
+              vx:Math.cos(a)*(450+State.difficulty*10),vy:Math.sin(a)*(450+State.difficulty*10),
+              color:'#f97316',life:3000,damage:25});
+            burst(b.x,b.y,'#fbbf24',10,100);
+          }
+        }
+        break;}
+
+      // ─── 新ボス：Satellite ──────────────────────────────────────
+      case 'satellite':{
+        // 衛星がボスの中央を周り、レーザー攻撃
+        b.satelliteAngle+=edt*0.001*(p2?1.5:1);
+        // 衛星の位置更新
+        for(let i=0;i<b.satellites.length;i++){
+          const sat=b.satellites[i];
+          sat.angle+=edt*0.0015*(i%2===0?1:-1)*(p2?1.3:1);
+          sat.x=b.x+Math.cos(sat.angle)*sat.distance;
+          sat.y=b.y+Math.sin(sat.angle)*sat.distance;
+        }
+        // 衛星からのレーザー攻撃
+        if(b.fireCd<=0){
+          b.fireCd=p2?800:1400;
+          for(const sat of b.satellites){
+            if(sat.hp>0){
+              const a=Math.atan2(player.y-sat.y,player.x-sat.x);
+              State.enemyBullets.push({type:'laser',x:sat.x,y:sat.y,r:5,
+                vx:Math.cos(a)*(320+State.difficulty*8),vy:Math.sin(a)*(320+State.difficulty*8),
+                color:'#60a5fa',life:2500});
+            }
+          }
+        }
+        // プレイヤーの弾が衛星に当たったかチェック（簡易）
+        break;}
+
+      // ─── 新ボス：Crystal Core ───────────────────────────────────
+      case 'crystal_core':{
+        // 結晶コア、周期的に破片を放出
+        b.crystalTimer=(b.crystalTimer||0)+edt;
+        if(b.fireCd<=0){
+          b.fireCd=p2?500:900;
+          const shards=p2?12:7;
+          for(let k=0;k<shards;k++){
+            const a=(k/shards)*Math.PI*2+b.crystalTimer*0.001;
+            State.enemyBullets.push({type:'normal',x:b.x,y:b.y,r:5,
+              vx:Math.cos(a)*(280+State.difficulty*6),vy:Math.sin(a)*(280+State.difficulty*6),
+              color:'#c084fc',life:2800});
+          }
+        }
+        // フェーズ 2 で高速回転
+        if(p2&&b.crystalTimer%400<50){
+          for(let k=0;k<4;k++){
+            const a=Math.random()*Math.PI*2;
+            State.enemyBullets.push({type:'normal',x:b.x,y:b.y,r:4,
+              vx:Math.cos(a)*400,vy:Math.sin(a)*400,
+              color:'#e879f9',life:2000});
+          }
+        }
+        break;}
+
+      // ─── 新ボス：Shadow Clone ───────────────────────────────────
+      case 'shadow_clone':{
+        // 分身を生成して攻撃
+        b.cloneTimer=(b.cloneTimer||0)+edt;
+        if(b.cloneTimer>=3000&&!b.hasClones){
+          b.hasClones=true;
+          // 2 つの分身を生成
+          for(let c=0;c<2;c++){
+            State.bosses.push({
+              type:'boss',kind:'shadow_clone_minion',
+              x:b.x+(c*80-40),y:b.y+rand(-40,40),
+              r:18,hp:40,maxHp:40,
+              vx:0,vy:0,fireCd:600,
+              parentBoss:b
+            });
+          }
+          toast('👤 分身出現！');
+          burst(b.x,b.y,'#64748b',20,200);
+        }
+        if(b.fireCd<=0){
+          b.fireCd=p2?400:650;
+          // 本体から狙い撃ち
+          const a=Math.atan2(player.y-b.y,player.x-b.x);
+          State.enemyBullets.push({type:'homing',x:b.x,y:b.y,r:5,
+            vx:Math.cos(a)*200,vy:Math.sin(a)*200,
+            target:player,turnSpeed:0.03,color:'#475569',life:4000});
+        }
+        break;}
+
+      // ─── 新ボス：Gravity Well ───────────────────────────────────
+      case 'gravity_well':{
+        // 重力でプレイヤーと弾を引き寄せる
+        b.gravityCharge=(b.gravityCharge||0)+edt;
+        // プレイヤーを引き寄せる
+        const dx=player.x-b.x,dy=player.y-b.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist>50&&dist<400){
+          const pull=(p2?0.08:0.05)*(edt/16);
+          player.x+=dx/dist*pull;
+          player.y+=dy/dist*pull;
+        }
+        // 重力弾を発射（遅いが曲がる）
+        if(b.fireCd<=0){
+          b.fireCd=p2?900:1500;
+          const gravBullets=p2?4:2;
+          for(let k=0;k<gravBullets;k++){
+            const a=Math.atan2(player.y-b.y,player.x-b.x)+rand(-0.3,0.3);
+            State.enemyBullets.push({type:'gravity',x:b.x,y:b.y,r:9,
+              vx:Math.cos(a)*150,vy:Math.sin(a)*150,
+              color:'#a855f7',life:5000,gravityWell:b});
+          }
+          burst(b.x,b.y,'#d8b4fe',12,140);
+          toast('🌀 Gravity Pull!');
+        }
+        break;}
     }
 
     if(b.kind!=='worm'){const anchored=(b.kind==='turret'||b.kind==='missile_lord');if(!anchored&&b.x<wrap.clientWidth*0.7)b.vx=-20;if(b.x<-100){State.bosses.splice(i,1);continue;}}
@@ -1509,12 +1661,48 @@ function update(dt){
         if(hit)break;
       }
     }
+    // Satellite 衛星への当たり判定
+    if(!hit){
+      for(let j=State.bosses.length-1;j>=0;j--){
+        const sb=State.bosses[j];
+        if(sb.kind!=='satellite'||!sb.satellites)continue;
+        for(let s=0;s<sb.satellites.length;s++){
+          const sat=sb.satellites[s];
+          if(sat.hp<=0)continue;
+          if(cc(b,{x:sat.x,y:sat.y,r:sat.r})){
+            sat.hp-=b.damage||State.attackPower;
+            hit=true;
+            burst(sat.x,sat.y,'#60a5fa',4,80);
+            spawnDamageNumber(sat.x,sat.y,b.damage||State.attackPower,'#fde047',false);
+            if(!b.pierce)State.bullets.splice(i,1);
+            if(sat.hp<=0){
+              burst(sat.x,sat.y,'#93c5fd',12,180);
+              toast('🛰 Satellite 破壊！');
+              award(50);
+            }
+            break;
+          }
+        }
+        if(hit)break;
+      }
+    }
   }
 
   // ── Enemy bullets ─────────────────────────────────────────────
   if(State.enemyBullets.length>500)State.enemyBullets.splice(0,State.enemyBullets.length-500);
   for(let i=State.enemyBullets.length-1;i>=0;i--){
     const b=State.enemyBullets[i];
+    // Gravity well bullet behavior
+    if(b.type==='gravity'&&b.gravityWell){
+      const gw=b.gravityWell;
+      const dx=gw.x-b.x,dy=gw.y-b.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>10&&dist<500){
+        const pull=80*(edt/1000);
+        b.vx+=dx/dist*pull;
+        b.vy+=dy/dist*pull;
+      }
+    }
     if(b.type==='homing'&&b.target){
       b.homingAge=(b.homingAge||0)+edt;
       if(b.homingAge<2500){
@@ -1536,7 +1724,7 @@ function update(dt){
     if(cc(b,player)){
       const sh=(skill.choice==='shield'&&skill.active)||skill.barrageBarrierTimer>0;
       if(sh){State.enemyBullets.splice(i,1);burst(player.x,player.y,'#f59e0b',4,80);}
-      else{State.enemyBullets.splice(i,1);hitPlayer(10);}
+      else{State.enemyBullets.splice(i,1);hitPlayer(b.damage||10);}
       continue;
     }
   }
@@ -1845,6 +2033,88 @@ function drawBoss(b){
         ctx.strokeStyle=`rgba(254,240,138,${0.5+Math.sin(State.time*0.03)*0.5})`;
         ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,b.r+10,0,Math.PI*2);ctx.stroke();
       }
+      break;}
+
+    // ─── 新ボス描画 ──────────────────────────────────────────────
+    case 'magnum':{
+      // 銃のような形状
+      ctx.fillStyle='#78350f';ctx.fillRect(-b.r,-b.r*0.6,b.r*2,b.r*1.2);
+      ctx.fillStyle='#b45309';ctx.fillRect(-b.r*0.3,-b.r*1.2,b.r*0.6,b.r*0.8);
+      // 砲身
+      ctx.fillStyle='#92400e';ctx.fillRect(b.r*0.4,-b.r*0.4,b.r*0.8,b.r*0.8);
+      // リロード中表示
+      if(b.isReloading){
+        ctx.fillStyle='#fbbf24';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+        ctx.fillText('RELOAD',0,-b.r-10);
+      }
+      break;}
+
+    case 'satellite':{
+      // 中央コア
+      ctx.fillStyle='#3b82f6';ctx.beginPath();ctx.arc(0,0,b.r*0.6,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#60a5fa';ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.fill();
+      // 衛星を描画
+      for(const sat of b.satellites){
+        if(sat.hp>0){
+          ctx.save();
+          ctx.translate(sat.x-b.x,sat.y-b.y);
+          ctx.fillStyle='#93c5fd';ctx.beginPath();ctx.arc(0,0,sat.r,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#dbeafe';ctx.beginPath();ctx.arc(0,0,sat.r*0.5,0,Math.PI*2);ctx.fill();
+          // レーザー砲身
+          ctx.fillStyle='#60a5fa';ctx.fillRect(-2,-sat.r*1.5,4,sat.r*1.5);
+          ctx.restore();
+        }
+      }
+      return;
+    }
+
+    case 'crystal_core':{
+      // 結晶形状
+      ctx.fillStyle='#c084fc';ctx.beginPath();
+      for(let k=0;k<6;k++){
+        const a=k/6*Math.PI*2;
+        const r=(k%2===0)?b.r:b.r*0.5;
+        ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+      }
+      ctx.closePath();ctx.fill();
+      // クリスタル輝き
+      ctx.fillStyle='#e879f9';ctx.beginPath();ctx.arc(0,0,b.r*0.3,0,Math.PI*2);ctx.fill();
+      break;}
+
+    case 'shadow_clone':{
+      // 影のような形状
+      ctx.fillStyle='#475569';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#64748b';ctx.beginPath();ctx.arc(0,0,b.r*0.5,0,Math.PI*2);ctx.fill();
+      // 目
+      ctx.fillStyle='#f1f5f9';ctx.beginPath();ctx.arc(-6,-4,4,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(6,-4,4,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#0f172a';ctx.beginPath();ctx.arc(-6,-4,2,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(6,-4,2,0,Math.PI*2);ctx.fill();
+      break;}
+
+    case 'shadow_clone_minion':{
+      // 分身（ミニオン）
+      ctx.fillStyle='#64748b';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#94a3b8';ctx.beginPath();ctx.arc(0,0,b.r*0.4,0,Math.PI*2);ctx.fill();
+      break;}
+
+    case 'gravity_well':{
+      // 重力井戸：渦巻き状
+      ctx.fillStyle='#a855f7';ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+      // 渦巻きアーム
+      ctx.strokeStyle='#d8b4fe';ctx.lineWidth=3;
+      for(let arm=0;arm<3;arm++){
+        const baseAngle=arm/3*Math.PI*2+State.time*0.003;
+        ctx.beginPath();
+        for(let t=0;t<1;t+=0.1){
+          const r=t*b.r*0.8;
+          const a=baseAngle+t*Math.PI*2;
+          ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+        }
+        ctx.stroke();
+      }
+      // 中心の暗黒
+      ctx.fillStyle='#0f172a';ctx.beginPath();ctx.arc(0,0,b.r*0.25,0,Math.PI*2);ctx.fill();
       break;}
   }
   // HP overlay glow when low
