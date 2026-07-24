@@ -166,6 +166,8 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
         <div class="charge-seg" id="charge-seg-1"></div>
         <div class="charge-seg" id="charge-seg-2"></div>
         <div class="charge-seg" id="charge-seg-3"></div>
+        <div class="charge-seg" id="charge-seg-4"></div>
+        <div class="charge-seg" id="charge-seg-5"></div>
       </div>
     </div>
   </div>
@@ -214,6 +216,7 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
     <label class="weapon-card" id="weaponCard-blackhole" style="--wcolor:#a78bfa"><input id="wsel-blackhole" name="wsel" type="radio" value="blackhole"/><div class="wname" style="color:#a78bfa">🌀BH砲</div><div class="wdesc">敵を引き寄せ</div></label>
     <label class="weapon-card" id="weaponCard-shotgun" style="--wcolor:#fb923c"><input id="wsel-shotgun" name="wsel" type="radio" value="shotgun"/><div class="wname" style="color:#fb923c">🟠ショットガン</div><div class="wdesc">7発散弾</div></label>
     <label class="weapon-card" id="weaponCard-charge_laser" style="--wcolor:#fde047"><input id="wsel-charge_laser" name="wsel" type="radio" value="charge_laser"/><div class="wname" style="color:#fde047">⚡チャージレーザー</div><div class="wdesc">長押し→離して発射</div></label>
+    <label class="weapon-card" id="weaponCard-charge_gatling" style="--wcolor:#f97316"><input id="wsel-charge_gatling" name="wsel" type="radio" value="charge_gatling"/><div class="wname" style="color:#f97316">🔥チャージガトリング</div><div class="wdesc">5 段階チャージで超高速連射</div></label>
   </div>
 </div>
 <div id="meta-upgrades" style="margin-top:18px;border-top:1px solid #2f2f2f;padding-top:14px;">
@@ -327,9 +330,9 @@ function resize(){const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));c
 window.addEventListener('resize',resize);resize();
 
 // ─── Weapons ──────────────────────────────────────────────────────
-const WEAPONS=['normal','missile','laser','spread','plasma','blackhole','shotgun','charge_laser'];
-const WEAPON_NAMES={normal:'通常弾',missile:'ミサイル',laser:'レーザー',spread:'スプレッド弾',plasma:'プラズマ砲',blackhole:'ブラックホール砲',shotgun:'ショットガン',charge_laser:'チャージレーザー'};
-const WEAPON_COLORS={normal:'#93c5fd',missile:'#f59e0b',laser:'#60a5fa',spread:'#34d399',plasma:'#c084fc',blackhole:'#7c3aed',shotgun:'#fb923c',charge_laser:'#fde047'};
+const WEAPONS=['normal','missile','laser','spread','plasma','blackhole','shotgun','charge_laser','charge_gatling'];
+const WEAPON_NAMES={normal:'通常弾',missile:'ミサイル',laser:'レーザー',spread:'スプレッド弾',plasma:'プラズマ砲',blackhole:'ブラックホール砲',shotgun:'ショットガン',charge_laser:'チャージレーザー',charge_gatling:'チャージガトリング'};
+const WEAPON_COLORS={normal:'#93c5fd',missile:'#f59e0b',laser:'#60a5fa',spread:'#34d399',plasma:'#c084fc',blackhole:'#7c3aed',shotgun:'#fb923c',charge_laser:'#fde047',charge_gatling:'#f97316'};
 
 // ─── Game State ───────────────────────────────────────────────────
 const State={
@@ -613,6 +616,69 @@ function fireChargeLaser(holdMs){
   toast('⚡ チャージレーザー Lv.'+tier);
 }
 
+// ─── Charge Gatling ───────────────────────────────────────────────
+function fireChargeGatling(holdMs){
+  const dmg=State.attackPower;
+  // 5 段階：25%(Lv2), 50%(Lv3), 75%(Lv4), 100%(Lv5)
+  let level=1;
+  const thresholds=[400,800,1200,1600];
+  for(let i=0;i<thresholds.length;i++){
+    if(holdMs>=thresholds[i])level=i+2;
+  }
+  
+  // レベルに応じて連射数と威力を設定
+  let shotCount,fireInterval,bulletSpeed,bulletDamage,spreadAngle;
+  switch(level){
+    case 1: shotCount=8; fireInterval=50; bulletSpeed=900; bulletDamage=dmg*0.8; spreadAngle=0.15; break;
+    case 2: shotCount=15; fireInterval=40; bulletSpeed=1000; bulletDamage=dmg*0.9; spreadAngle=0.12; break;
+    case 3: shotCount=25; fireInterval=30; bulletSpeed=1100; bulletDamage=dmg*1.0; spreadAngle=0.10; break;
+    case 4: shotCount=40; fireInterval=22; bulletSpeed=1200; bulletDamage=dmg*1.1; spreadAngle=0.08; break;
+    case 5: shotCount=60; fireInterval=15; bulletSpeed=1400; bulletDamage=dmg*1.3; spreadAngle=0.06; break;
+  }
+  
+  chargeGaugeWrap.style.display='none';
+  toast('🔥 チャージガトリング Lv.'+level+' - '+shotCount+'連射！');
+  
+  // 円を描くような軌道で発射
+  let shot=0;
+  function fireNext(){
+    if(!State.running||shot>=shotCount)return;
+    
+    const angle=(shot/shotCount)*Math.PI*2; // 円形に角度を分配
+    const px=player.x+player.r+2;
+    const vx=Math.cos(angle)*bulletSpeed;
+    const vy=Math.sin(angle)*bulletSpeed;
+    
+    State.bullets.push({
+      type:'gatling',
+      x:px,
+      y:player.y,
+      r:4,
+      vx:vx,
+      vy:vy,
+      speed:bulletSpeed,
+      damage:bulletDamage,
+      life:2000,
+      color:'#f97316',
+      pierce:level>=4
+    });
+    
+    shot++;
+    setTimeout(fireNext,fireInterval);
+  }
+  
+  // チャージ完了エフェクト
+  burst(player.x+player.r,player.y,'#f97316',level*6,180+level*30);
+  if(level===5){
+    playSfx(sfx.fullcharge);
+    triggerScreenShake(4,10,25);
+  } else {
+    playSfx(sfx.charge);
+  }
+  
+  fireNext();
+}
+
 function applyChargeBeamTick(beam,tickMs){
   const halfW=beam.width/2;
   const px=player.x,py=player.y;
@@ -711,6 +777,7 @@ function turretFireInterval(w){
     case 'blackhole': return 700;
     case 'shotgun': return 320;
     case 'charge_laser': return 110;
+    case 'charge_gatling': return 80;
     default: return 200;
   }
 }
@@ -1026,19 +1093,44 @@ const playerHpBar=document.getElementById('player-hp-bar');
 const hpTextEl=document.getElementById('hp-text');
 const chargeGaugeWrap=document.getElementById('charge-gauge-wrap');
 const chargeGaugeLabel=document.getElementById('charge-gauge-label');
-const chargeSegEls=[document.getElementById('charge-seg-1'),document.getElementById('charge-seg-2'),document.getElementById('charge-seg-3')];
+const chargeSegEls=[document.getElementById('charge-seg-1'),document.getElementById('charge-seg-2'),document.getElementById('charge-seg-3'),document.getElementById('charge-seg-4'),document.getElementById('charge-seg-5')];
 function updateChargeGauge(){
-  if(!State.running||WEAPONS[State.weaponIndex]!=='charge_laser'||!State.charging){
+  const curWeapon=WEAPONS[State.weaponIndex];
+  if(!State.running||!State.charging||(curWeapon!=='charge_laser'&&curWeapon!=='charge_gatling')){
     chargeGaugeWrap.style.display='none';return;
   }
   chargeGaugeWrap.style.display='block';
   const heldMs=State.time-State.chargeStart;
-  const level=heldMs<350?1:heldMs<1400?2:3;
-  chargeGaugeLabel.textContent='CHARGE Lv.'+level+(level===3?' MAX':'');
-  for(let i=0;i<3;i++){
-    const lit=i<level;
-    chargeSegEls[i].classList.toggle('lit',lit);
-    chargeSegEls[i].classList.toggle('max',lit&&level===3);
+  let level,maxLevel;
+  
+  if(curWeapon==='charge_gatling'){
+    // 5 段階チャージ：25% で Lv2, 50% で Lv3, 75% で Lv4, 100% で Lv5
+    maxLevel=5;
+    const thresholds=[400,800,1200,1600]; // 各レベルへの閾値 (ms)
+    level=1;
+    for(let i=0;i<thresholds.length;i++){
+      if(heldMs>=thresholds[i])level=i+2;
+    }
+    chargeGaugeLabel.textContent='CHARGE Lv.'+level+(level===5?' MAX':'');
+    for(let i=0;i<5;i++){
+      const lit=i<level;
+      chargeSegEls[i].classList.toggle('lit',lit);
+      chargeSegEls[i].classList.toggle('max',lit&&level===5);
+    }
+  } else {
+    // charge_laser: 従来通り 3 段階
+    maxLevel=3;
+    level=heldMs<350?1:heldMs<1400?2:3;
+    chargeGaugeLabel.textContent='CHARGE Lv.'+level+(level===3?' MAX':'');
+    for(let i=0;i<3;i++){
+      const lit=i<level;
+      chargeSegEls[i].classList.toggle('lit',lit);
+      chargeSegEls[i].classList.toggle('max',lit&&level===3);
+    }
+    // 残りのセグメントを非表示
+    for(let i=3;i<5;i++){
+      chargeSegEls[i].classList.remove('lit','max');
+    }
   }
 }
 function updateHUD(){
@@ -1323,7 +1415,8 @@ window.addEventListener('keydown',(e)=>{
   if(document.getElementById('levelup').style.display==='grid')return;
   State.keys[k]=true;
   if(e.code==='Space'){
-    if(WEAPONS[State.weaponIndex]==='charge_laser'){
+    const curWeapon=WEAPONS[State.weaponIndex];
+    if(curWeapon==='charge_laser'||curWeapon==='charge_gatling'){
       if(!State.charging){State.charging=true;State.chargeStart=State.time;State.maxChargeAnnounced=false;}
     } else {
       if(!State.holdSpace)firePlayerBullet(true);State.holdSpace=true;
@@ -1345,8 +1438,13 @@ window.addEventListener('keyup',(e)=>{
   if(e.code==='Space'){
     if(State.charging){
       const holdMs=State.time-State.chargeStart;
+      const curWeapon=WEAPONS[State.weaponIndex];
       State.charging=false;
-      fireChargeLaser(holdMs);
+      if(curWeapon==='charge_gatling'){
+        fireChargeGatling(holdMs);
+      } else {
+        fireChargeLaser(holdMs);
+      }
     }
     State.holdSpace=false;e.preventDefault();
   }
