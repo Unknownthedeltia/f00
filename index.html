@@ -80,6 +80,11 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
 .charge-seg{flex:1;height:10px;border:1px solid #4a4420;border-radius:3px;background:rgba(253,224,71,.08);transition:background .1s ease,box-shadow .1s ease;}
 .charge-seg.lit{background:linear-gradient(90deg,#fde047,#facc15);box-shadow:0 0 8px rgba(253,224,71,.8);}
 .charge-seg.lit.max{background:linear-gradient(90deg,#facc15,#f97316);box-shadow:0 0 12px rgba(249,115,22,.9);}
+.circular-charge-wrap{margin-top:8px;width:60px;height:60px;position:relative;}
+.circular-charge-svg{width:100%;height:100%;transform:rotate(-90deg);}
+.circular-charge-bg{fill:none;stroke:#2a2a2a;stroke-width:8;}
+.circular-charge-bar{fill:none;stroke:#ef4444;stroke-width:8;stroke-linecap:round;stroke-dasharray:263.89;stroke-dashoffset:263.89;transition:stroke-dashoffset .1s ease;}
+.circular-charge-text{fill:#fff;font-size:12px;font-weight:800;text-anchor:middle;transform:rotate(90deg) translate(0,-100px);}
 .skilltag{position:absolute;top:70px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--hud-dim);display:flex;gap:8px;align-items:center;}
 #boss-hud{position:absolute;top:118px;left:50%;transform:translateX(-50%);width:min(60vw,720px);}
 .boss-name{text-align:center;font-size:14px;margin-bottom:4px;color:var(--bad);font-weight:bold;text-shadow:0 0 5px var(--bad);}
@@ -168,6 +173,13 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
         <div class="charge-seg" id="charge-seg-3"></div>
       </div>
     </div>
+    <div class="circular-charge-wrap" id="circular-charge-wrap" style="display:none;">
+      <svg class="circular-charge-svg" viewBox="0 0 100 100">
+        <circle class="circular-charge-bg" cx="50" cy="50" r="42"/>
+        <circle class="circular-charge-bar" id="circular-charge-bar" cx="50" cy="50" r="42"/>
+        <text class="circular-charge-text" id="circular-charge-text" x="50" y="54">Lv.1</text>
+      </svg>
+    </div>
   </div>
 </div>
 <div id="boss-hud" style="display:none;">
@@ -214,6 +226,7 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
     <label class="weapon-card" id="weaponCard-blackhole" style="--wcolor:#a78bfa"><input id="wsel-blackhole" name="wsel" type="radio" value="blackhole"/><div class="wname" style="color:#a78bfa">🌀BH砲</div><div class="wdesc">敵を引き寄せ</div></label>
     <label class="weapon-card" id="weaponCard-shotgun" style="--wcolor:#fb923c"><input id="wsel-shotgun" name="wsel" type="radio" value="shotgun"/><div class="wname" style="color:#fb923c">🟠ショットガン</div><div class="wdesc">7発散弾</div></label>
     <label class="weapon-card" id="weaponCard-charge_laser" style="--wcolor:#fde047"><input id="wsel-charge_laser" name="wsel" type="radio" value="charge_laser"/><div class="wname" style="color:#fde047">⚡チャージレーザー</div><div class="wdesc">長押し→離して発射</div></label>
+    <label class="weapon-card" id="weaponCard-charge_gatling" style="--wcolor:#ef4444"><input id="wsel-charge_gatling" name="wsel" type="radio" value="charge_gatling"/><div class="wname" style="color:#ef4444">🔥チャージガトリング</div><div class="wdesc">長押しチャージ・Lv5 で超連射</div></label>
   </div>
 </div>
 <div id="meta-upgrades" style="margin-top:18px;border-top:1px solid #2f2f2f;padding-top:14px;">
@@ -327,9 +340,9 @@ function resize(){const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));c
 window.addEventListener('resize',resize);resize();
 
 // ─── Weapons ──────────────────────────────────────────────────────
-const WEAPONS=['normal','missile','laser','spread','plasma','blackhole','shotgun','charge_laser'];
-const WEAPON_NAMES={normal:'通常弾',missile:'ミサイル',laser:'レーザー',spread:'スプレッド弾',plasma:'プラズマ砲',blackhole:'ブラックホール砲',shotgun:'ショットガン',charge_laser:'チャージレーザー'};
-const WEAPON_COLORS={normal:'#93c5fd',missile:'#f59e0b',laser:'#60a5fa',spread:'#34d399',plasma:'#c084fc',blackhole:'#7c3aed',shotgun:'#fb923c',charge_laser:'#fde047'};
+const WEAPONS=['normal','missile','laser','spread','plasma','blackhole','shotgun','charge_laser','charge_gatling'];
+const WEAPON_NAMES={normal:'通常弾',missile:'ミサイル',laser:'レーザー',spread:'スプレッド弾',plasma:'プラズマ砲',blackhole:'ブラックホール砲',shotgun:'ショットガン',charge_laser:'チャージレーザー',charge_gatling:'チャージガトリング'};
+const WEAPON_COLORS={normal:'#93c5fd',missile:'#f59e0b',laser:'#60a5fa',spread:'#34d399',plasma:'#c084fc',blackhole:'#7c3aed',shotgun:'#fb923c',charge_laser:'#fde047',charge_gatling:'#ef4444'};
 
 // ─── Game State ───────────────────────────────────────────────────
 const State={
@@ -613,6 +626,57 @@ function fireChargeLaser(holdMs){
   toast('⚡ チャージレーザー Lv.'+tier);
 }
 
+// ─── Charge Gatling ────────────────────────────────────────────────
+let gatlingFiring=false;
+let gatlingEndTime=0;
+function fireChargeGatling(holdMs){
+  const dmg=State.attackPower;
+  const chargePct=Math.min(1,holdMs/3000);
+  const level=Math.floor(chargePct*5)+1;
+  const clampedLevel=Math.min(5,level);
+  
+  if(clampedLevel<5){
+    toast('🔥 チャージ不足：Lv.'+clampedLevel);
+    return;
+  }
+  
+  gatlingFiring=true;
+  gatlingEndTime=State.time+3000;
+  const fireRate=40;
+  const bulletSpeed=900;
+  const spread=0.08;
+  
+  function fireGatlingShot(){
+    if(!gatlingFiring||!State.running)return;
+    const px=player.x+player.r+2,py=player.y;
+    for(let i=0;i<3;i++){
+      const ang=(i-1)*spread;
+      State.bullets.push({
+        type:'normal',
+        x:px,y:py,
+        r:4,
+        vx:bulletSpeed*Math.cos(ang),
+        vy:bulletSpeed*Math.sin(ang),
+        damage:dmg*1.8,
+        pierce:false,
+        color:'#ef4444'
+      });
+    }
+    burst(px,py,'#ef4444',2,50);
+    if(State.time<gatlingEndTime){
+      setTimeout(fireGatlingShot,fireRate);
+    } else {
+      gatlingFiring=false;
+      toast('🔥 ガトリング終了');
+    }
+  }
+  
+  playSfx(sfx.fullcharge);
+  triggerScreenShake(4,8,20);
+  toast('🔥 チャージガトリング Lv.5！3 秒間連射！');
+  fireGatlingShot();
+}
+
 function applyChargeBeamTick(beam,tickMs){
   const halfW=beam.width/2;
   const px=player.x,py=player.y;
@@ -711,6 +775,7 @@ function turretFireInterval(w){
     case 'blackhole': return 700;
     case 'shotgun': return 320;
     case 'charge_laser': return 110;
+    case 'charge_gatling': return 80;
     default: return 200;
   }
 }
@@ -745,6 +810,9 @@ function fireFromTurret(t){
       break;
     case 'charge_laser':
       add({type:'laser',x:t.x,y:t.y,r:3,vx:Math.cos(ang)*1600*mult,vy:Math.sin(ang)*1600*mult,pierce:true,damage:dmg*1.2,life:650,color:'#fde047',w:30,h:6});
+      break;
+    case 'charge_gatling':
+      add({type:'normal',x:t.x,y:t.y,r:3,vx:Math.cos(ang)*spd*1.3,vy:Math.sin(ang)*spd*1.3,damage:dmg*1.1,pierce:false,color:'#ef4444'});
       break;
     default:
       add({type:'normal',x:t.x,y:t.y,r:3,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,damage:dmg,pierce:false,color:'#93c5fd'});
@@ -1027,18 +1095,47 @@ const hpTextEl=document.getElementById('hp-text');
 const chargeGaugeWrap=document.getElementById('charge-gauge-wrap');
 const chargeGaugeLabel=document.getElementById('charge-gauge-label');
 const chargeSegEls=[document.getElementById('charge-seg-1'),document.getElementById('charge-seg-2'),document.getElementById('charge-seg-3')];
+const circularChargeWrap=document.getElementById('circular-charge-wrap');
+const circularChargeBar=document.getElementById('circular-charge-bar');
+const circularChargeText=document.getElementById('circular-charge-text');
+const CIRCUMFERENCE=2*Math.PI*42;
 function updateChargeGauge(){
-  if(!State.running||WEAPONS[State.weaponIndex]!=='charge_laser'||!State.charging){
-    chargeGaugeWrap.style.display='none';return;
+  if(!State.running||!State.charging){
+    chargeGaugeWrap.style.display='none';
+    circularChargeWrap.style.display='none';
+    return;
   }
-  chargeGaugeWrap.style.display='block';
-  const heldMs=State.time-State.chargeStart;
-  const level=heldMs<350?1:heldMs<1400?2:3;
-  chargeGaugeLabel.textContent='CHARGE Lv.'+level+(level===3?' MAX':'');
-  for(let i=0;i<3;i++){
-    const lit=i<level;
-    chargeSegEls[i].classList.toggle('lit',lit);
-    chargeSegEls[i].classList.toggle('max',lit&&level===3);
+  const w=WEAPONS[State.weaponIndex];
+  if(w==='charge_laser'){
+    chargeGaugeWrap.style.display='block';
+    circularChargeWrap.style.display='none';
+    const heldMs=State.time-State.chargeStart;
+    const level=heldMs<350?1:heldMs<1400?2:3;
+    chargeGaugeLabel.textContent='CHARGE Lv.'+level+(level===3?' MAX':'');
+    for(let i=0;i<3;i++){
+      const lit=i<level;
+      chargeSegEls[i].classList.toggle('lit',lit);
+      chargeSegEls[i].classList.toggle('max',lit&&level===3);
+    }
+  } else if(w==='charge_gatling'){
+    chargeGaugeWrap.style.display='none';
+    circularChargeWrap.style.display='block';
+    const heldMs=State.time-State.chargeStart;
+    const chargePct=Math.min(1,heldMs/3000);
+    const level=Math.floor(chargePct*5)+1;
+    const offset=CIRCUMFERENCE*(1-chargePct);
+    circularChargeBar.style.strokeDashoffset=offset;
+    circularChargeText.textContent='Lv.'+Math.min(5,level);
+    if(level>=5){
+      circularChargeBar.style.stroke='#f97316';
+      circularChargeText.style.fill='#fde047';
+    } else {
+      circularChargeBar.style.stroke='#ef4444';
+      circularChargeText.style.fill='#fff';
+    }
+  } else {
+    chargeGaugeWrap.style.display='none';
+    circularChargeWrap.style.display='none';
   }
 }
 function updateHUD(){
@@ -1323,7 +1420,8 @@ window.addEventListener('keydown',(e)=>{
   if(document.getElementById('levelup').style.display==='grid')return;
   State.keys[k]=true;
   if(e.code==='Space'){
-    if(WEAPONS[State.weaponIndex]==='charge_laser'){
+    const w=WEAPONS[State.weaponIndex];
+    if(w==='charge_laser'||w==='charge_gatling'){
       if(!State.charging){State.charging=true;State.chargeStart=State.time;State.maxChargeAnnounced=false;}
     } else {
       if(!State.holdSpace)firePlayerBullet(true);State.holdSpace=true;
@@ -1345,8 +1443,13 @@ window.addEventListener('keyup',(e)=>{
   if(e.code==='Space'){
     if(State.charging){
       const holdMs=State.time-State.chargeStart;
+      const w=WEAPONS[State.weaponIndex];
       State.charging=false;
-      fireChargeLaser(holdMs);
+      if(w==='charge_laser'){
+        fireChargeLaser(holdMs);
+      } else if(w==='charge_gatling'){
+        fireChargeGatling(holdMs);
+      }
     }
     State.holdSpace=false;e.preventDefault();
   }
