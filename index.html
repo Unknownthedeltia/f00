@@ -635,29 +635,41 @@ function fireChargeGatling(holdMs){
   const level=Math.floor(chargePct*5)+1;
   const clampedLevel=Math.min(5,level);
   
-  if(clampedLevel<5){
-    toast('🔥 チャージ不足：Lv.'+clampedLevel);
-    return;
+  // Lv に応じて発射設定を決定
+  let fireDuration=0; // ms
+  let fireRate=200; // ms per shot
+  let bulletSpeed=600;
+  let spread=0.15;
+  let shotsPerBurst=1;
+  let burstDamageMult=1.0;
+  
+  if(clampedLevel===1){
+    fireDuration=500; fireRate=200; bulletSpeed=500; spread=0.2; shotsPerBurst=1; burstDamageMult=0.8;
+  } else if(clampedLevel===2){
+    fireDuration=1000; fireRate=150; bulletSpeed=600; spread=0.18; shotsPerBurst=1; burstDamageMult=1.0;
+  } else if(clampedLevel===3){
+    fireDuration=1500; fireRate=100; bulletSpeed=700; spread=0.15; shotsPerBurst=2; burstDamageMult=1.2;
+  } else if(clampedLevel===4){
+    fireDuration=2000; fireRate=70; bulletSpeed=800; spread=0.12; shotsPerBurst=2; burstDamageMult=1.4;
+  } else if(clampedLevel===5){
+    fireDuration=3000; fireRate=40; bulletSpeed=900; spread=0.08; shotsPerBurst=3; burstDamageMult=1.8;
   }
   
   gatlingFiring=true;
-  gatlingEndTime=State.time+3000;
-  const fireRate=40;
-  const bulletSpeed=900;
-  const spread=0.08;
+  gatlingEndTime=State.time+fireDuration;
   
   function fireGatlingShot(){
     if(!gatlingFiring||!State.running)return;
     const px=player.x+player.r+2,py=player.y;
-    for(let i=0;i<3;i++){
-      const ang=(i-1)*spread;
+    for(let i=0;i<shotsPerBurst;i++){
+      const ang=(i-(shotsPerBurst-1)/2)*spread;
       State.bullets.push({
         type:'normal',
         x:px,y:py,
         r:4,
         vx:bulletSpeed*Math.cos(ang),
         vy:bulletSpeed*Math.sin(ang),
-        damage:dmg*1.8,
+        damage:dmg*burstDamageMult,
         pierce:false,
         color:'#ef4444'
       });
@@ -667,13 +679,19 @@ function fireChargeGatling(holdMs){
       setTimeout(fireGatlingShot,fireRate);
     } else {
       gatlingFiring=false;
-      toast('🔥 ガトリング終了');
+      if(clampedLevel>=5){
+        toast('🔥 ガトリング終了');
+      }
     }
   }
   
   playSfx(sfx.fullcharge);
-  triggerScreenShake(4,8,20);
-  toast('🔥 チャージガトリング Lv.5！3 秒間連射！');
+  triggerScreenShake(clampedLevel>=5?4:2,clampedLevel>=5?8:4,clampedLevel>=5?20:10);
+  if(clampedLevel>=5){
+    toast('🔥 チャージガトリング Lv.5！3 秒間連射！');
+  } else {
+    toast('🔥 チャージガトリング Lv.'+clampedLevel+'！'+(fireDuration/1000)+'秒間連射！');
+  }
   fireGatlingShot();
 }
 
